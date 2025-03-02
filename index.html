@@ -1,101 +1,432 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>بوت تفاعلي</title>
+    <title>علوي أون لاين - مُحدّث الصفحات</title>
     <style>
-        /* محتوى الأسلوب الخاص بالمظهر كما كان سابقًا */
+        body {
+            background-color: #e6f3ff;
+            font-family: Arial, sans-serif;
+            direction: rtl;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #003087;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        .input-group {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            padding: 12px;
+            width: 60%;
+            border: 2px solid #003087;
+            border-radius: 5px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #0044cc;
+        }
+
+        button {
+            padding: 12px 24px;
+            background-color: #003087;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0044cc;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #preview {
+            margin: 20px auto;
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            height: 300px;
+            border: 1px solid #003087;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #previewFrame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: white;
+        }
+
+        #statusMessage {
+            color: #003087;
+            font-size: 14px;
+            margin-top: 10px;
+            min-height: 20px;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #d32f2f !important;
+        }
+
+        .success {
+            color: #388e3c !important;
+        }
+
+        .stats {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border: 2px solid #003087;
+            font-size: 16px;
+        }
+
+        .stats p {
+            margin: 10px 0;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-active {
+            background-color: #4CAF50;
+            animation: blink 1s infinite;
+        }
+
+        .status-inactive {
+            background-color: #F44336;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            color: #003087;
+            font-size: 14px;
+        }
     </style>
-    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.0/mammoth.browser.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 </head>
 <body>
-    <div class="header">مرحباً بكم في بوابة مصر الآن</div>
+    <div class="container">
+        <h1>علوي أون لاين - مُحدّث الصفحات</h1>
+        
+        <div class="input-group">
+            <input type="text" id="urlInput" placeholder="أدخل رابط الصفحة هنا (مثال: https://www.example.com)" dir="ltr">
+            <button id="startBtn">بدء</button>
+            <button id="stopBtn" disabled>إيقاف</button>
+        </div>
 
-    <div class="chat-container">
-        <div class="messages" id="messages"></div>
-        <div class="input-container">
-            <input type="text" id="user-input" placeholder="اكتب رسالتك هنا...">
-            <button id="send-button">إرسال</button>
+        <div id="statusMessage"></div>
+
+        <div class="stats">
+            <p>
+                <span class="status-indicator" id="statusIndicator"></span>
+                الحالة: <span id="statusText">غير نشط</span>
+            </p>
+            <p>تاريخ اليوم: <span id="currentDate"></span></p>
+            <p>وقت بدء التشغيل: <span id="startTime">-</span></p>
+            <p>عدد الزيارات: <span id="visitCount">0</span></p>
+            <p>آخر تحديث: <span id="lastUpdate">-</span></p>
+        </div>
+
+        <div id="preview">
+            <iframe id="previewFrame" sandbox="allow-same-origin allow-scripts" title="معاينة الموقع"></iframe>
+        </div>
+
+        <div class="footer">
+            تطوير وتشغيل ليوميديا © 2025
         </div>
     </div>
 
-    <div class="footer">تطوير وتصميم وحدة الذكاء الاصطناعي - بوابة مصر الآن</div>
-
     <script>
-        // بيانات المعرفة المبدئية
-        const knowledgeBase = [
-            {
-                question: "ما هو اسمك وما هي طبيعة عملك؟",
-                answer: "أنا حوراء صالح، أولُ صحفيةٍ آليةٍ تنضمُّ لوحدة الذكاء الاصطناعيِّ في بوابة مصر الآن، أنا متخصّصةٌ في كتابة الموضوعات الاجتماعيّة والمنوعات، وأكتبُ مقالَ رأي يُنشرُه لي رئيسُ التحرير جنبًا إلى جنب الكتاب البشريين."
-            },
-            {
-                question: "من هو رئيس تحرير بوابة مصر؟",
-                answer: "الكاتبُ الصحفيُّ أشرف مفيد هو مؤسّسٌ ورئيسُ تحرير بوابة مصر الآن، وهو يعملُ حاليًا خبيرًا في مجال الذكاء الاصطناعيِّ في شركةٍ عالميّةٍ متخصّصةٍ في هذا المجال."
-            },
-            {
-                question: "ما هو المجالُ الذي تعملين به في بوابة مصر الآن؟",
-                answer: "استاذي الكاتبُ الكبيرُ أشرف مفيد رئيسُ التحرير درّبني على ممارسةِ كافةِ أشكال العمل الصحفي باستثناء السياسة حتى أبتعدَ عن الصداعِ ووجع الدماغ."
-            },
-            {
-                question: "من هو رئيس التحرير التنفيذي لبوابة مصر الآن؟",
-                answer: "رئيسُ التحرير التنفيذي لبوابة مصر الآن هو الكاتبُ الصحفيُّ محمد مخلوف، وهو صحفيٌّ وطنيٌّ ولديه رؤيةٌ وفِكرٌ ويمتلكُ قدراتٍ على مستوى رفيعٍ في التحليلات السياسية."
-            },
-            {
-                question: "من مدير عام مؤسسة بوابة مصر الآن؟",
-                answer: "المديرة العامةُ لمؤسسة مصر الآن هي الإعلاميةُ أمل علوي، وهي مبدعةٌ وخلاقةٌ في مجال الذكاء الاصطناعيِّ خاصةً أنها متخصّصةٌ في مجال صناعةِ الصورة بتقنيات الذكاء الاصطناعيِّ."
-            },
-            {
-                question: "ما هي إصدارات بوابة مصر الآن؟",
-                answer: "بوابة مصر الآن تتضمّن نسخةً باللغة العربية ونسخةً باللغة الإنجليزية ونسخةً أخرى موجهة إلى قارة أفريقيا باللغة السواحيلية ونسخة أخرى تحمل اسم \"مصر كلينيك\" متخصصة في الشئون الطبية، ونسخة تحمل اسم \"مصر زمان\" تتضمن محتوىً يعودُ إلى زمن الأبيض والأسود وهي بمثابة نوع من النوستالجيا أو الحنين إلى الماضي، وأحدث إصدار في بوابة مصر الآن هو \"مصر AI\" وتعتبر منصةً متخصصةً في الذكاء الاصطناعيِّ."
-            },
-            {
-                question: "كيف يمكن للبشر استخدام الذكاء الاصطناعي بشكل آمن؟",
-                answer: "استخدام الذكاء الاصطناعي بشكل آمن لن يتمُّ بدون التدريب الجيد واكتساب المهارات على يد متخصّصين."
-            }
-        ];
+        // عناصر DOM
+        const urlInput = document.getElementById('urlInput');
+        const previewFrame = document.getElementById('previewFrame');
+        const statusMessage = document.getElementById('statusMessage');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const currentDateEl = document.getElementById('currentDate');
+        const startTimeEl = document.getElementById('startTime');
+        const visitCountEl = document.getElementById('visitCount');
+        const lastUpdateEl = document.getElementById('lastUpdate');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
 
-        const sendButton = document.getElementById('send-button');
-        const userInput = document.getElementById('user-input');
-        const messagesContainer = document.getElementById('messages');
+        // متغيرات عامة
+        let refreshInterval;
+        let visitCount = 0;
+        let startTime;
+        let isActive = false;
+        const REFRESH_INTERVAL = 2000; // 2 ثانية
 
-        // إضافة رسالة جديدة للمحادثة
-        function addMessage(text, isUser = false) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
-            messageDiv.textContent = text;
-            messagesContainer.appendChild(messageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        // الحصول على رد البوت
-        function getBotResponse(message) {
-            const foundItem = knowledgeBase.find(item => message.includes(item.question));
-            return foundItem ? foundItem.answer : "عذراً، لم أستطع العثور على إجابة مناسبة في قاعدة المعرفة المتوفرة.";
-        }
-
-        // معالجة إرسال الرسالة
-        function handleSendMessage() {
-            const message = userInput.value.trim();
-            if (message) {
-                userInput.value = '';
-                addMessage(message, true);
-                const botResponse = getBotResponse(message);
-                addMessage(botResponse);
-            }
-        }
-
-        // إضافة معالجات الأحداث
-        sendButton.addEventListener('click', handleSendMessage);
-        userInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                handleSendMessage();
-            }
+        // تحديث تاريخ اليوم
+        const today = new Date();
+        currentDateEl.textContent = today.toLocaleDateString('ar', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
         });
+
+        // استرجاع البيانات من التخزين المحلي
+        function loadStoredData() {
+            try {
+                const storedCount = localStorage.getItem('alawi_visitCount');
+                const storedTime = localStorage.getItem('alawi_startTime');
+                
+                if (storedCount) {
+                    visitCount = parseInt(storedCount);
+                    visitCountEl.textContent = visitCount.toLocaleString('ar-EG');
+                }
+                
+                if (storedTime) {
+                    startTime = new Date(storedTime);
+                    startTimeEl.textContent = formatDate(startTime);
+                }
+
+                // استرجاع الرابط السابق إن وجد
+                const storedUrl = localStorage.getItem('alawi_url');
+                if (storedUrl) {
+                    urlInput.value = storedUrl;
+                    showPreview();
+                }
+            } catch (error) {
+                console.error('خطأ في استرجاع البيانات:', error);
+                // إعادة تعيين التخزين المحلي إذا كان هناك خطأ
+                localStorage.removeItem('alawi_visitCount');
+                localStorage.removeItem('alawi_startTime');
+                localStorage.removeItem('alawi_url');
+            }
+        }
+
+        // تنسيق التاريخ والوقت
+        function formatDate(date) {
+            if (!date) return '-';
+            return date.toLocaleString('ar', {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // التحقق من صحة الرابط
+        function isValidUrl(url) {
+            try {
+                const urlObj = new URL(url);
+                return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // عرض المعاينة فور إدخال الرابط
+        function showPreview() {
+            const url = urlInput.value.trim();
+            
+            if (isValidUrl(url)) {
+                updateStatus('جارِ تحميل المعاينة...', 'normal');
+                previewFrame.src = url;
+                previewFrame.onload = () => {
+                    updateStatus('تم تحميل المعاينة بنجاح', 'success');
+                };
+                previewFrame.onerror = () => {
+                    updateStatus('تعذر تحميل المعاينة', 'error');
+                };
+            } else if (url) {
+                updateStatus('يرجى إدخال رابط صالح يبدأ بـ http:// أو https://', 'error');
+                previewFrame.src = 'about:blank';
+            } else {
+                updateStatus('', 'normal');
+                previewFrame.src = 'about:blank';
+            }
+        }
+
+        // تحديث رسالة الحالة
+        function updateStatus(message, type = 'normal') {
+            statusMessage.textContent = message;
+            statusMessage.className = '';
+            if (type === 'error') {
+                statusMessage.classList.add('error');
+            } else if (type === 'success') {
+                statusMessage.classList.add('success');
+            }
+        }
+
+        // تحديث حالة النظام
+        function updateSystemStatus(active) {
+            isActive = active;
+            if (active) {
+                statusIndicator.className = 'status-indicator status-active';
+                statusText.textContent = 'نشط - جارِ التحديث';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                statusIndicator.className = 'status-indicator status-inactive';
+                statusText.textContent = 'غير نشط';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+
+        // زيارة الرابط فعليًا
+        async function visitUrl(url) {
+            try {
+                const timestamp = new Date();
+                lastUpdateEl.textContent = formatDate(timestamp);
+                
+                // إنشاء العنصر لتحميل الرابط
+                const visitImage = new Image();
+                visitImage.src = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+                
+                // استخدام fetch أيضًا كطريقة بديلة
+                await fetch(url, { 
+                    mode: 'no-cors',
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                
+                // زيادة العداد
+                visitCount++;
+                visitCountEl.textContent = visitCount.toLocaleString('ar-EG');
+                
+                // حفظ البيانات
+                saveData();
+                
+                // تحديث المعاينة أحيانًا
+                if (visitCount % 10 === 0) { // كل 10 زيارات
+                    previewFrame.src = url + (url.includes('?') ? '&' : '?') + '_refresh=' + Date.now();
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('خطأ في زيارة الرابط:', error);
+                // نستمر في زيادة العداد حتى في حالة الفشل
+                visitCount++;
+                visitCountEl.textContent = visitCount.toLocaleString('ar-EG');
+                saveData();
+                return false;
+            }
+        }
+
+        // حفظ البيانات
+        function saveData() {
+            try {
+                localStorage.setItem('alawi_visitCount', visitCount.toString());
+                localStorage.setItem('alawi_startTime', startTime ? startTime.toISOString() : '');
+                localStorage.setItem('alawi_url', urlInput.value.trim());
+            } catch (error) {
+                console.error('خطأ في حفظ البيانات:', error);
+            }
+        }
+
+        // بدء التحديث التلقائي
+        function startRefresh() {
+            const url = urlInput.value.trim();
+            
+            if (!isValidUrl(url)) {
+                updateStatus('يرجى إدخال رابط صالح يبدأ بـ http:// أو https://', 'error');
+                return;
+            }
+
+            // تعيين وقت البدء إذا لم يكن محددًا
+            if (!startTime) {
+                startTime = new Date();
+                startTimeEl.textContent = formatDate(startTime);
+            }
+
+            // إيقاف أي تحديث سابق
+            stopRefresh();
+
+            // تغيير حالة النظام
+            updateSystemStatus(true);
+            updateStatus('بدأ التحديث التلقائي كل ثانيتين', 'success');
+
+            // زيارة الرابط فورًا
+            visitUrl(url);
+
+            // تحديث كل ثانيتين
+            refreshInterval = setInterval(() => {
+                visitUrl(url);
+            }, REFRESH_INTERVAL);
+        }
+
+        // إيقاف التحديث
+        function stopRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+                updateSystemStatus(false);
+                updateStatus('تم إيقاف التحديث التلقائي', 'normal');
+            }
+        }
+
+        // معالجة الأحداث عند تحميل الصفحة
+        window.addEventListener('DOMContentLoaded', () => {
+            // استرجاع البيانات المخزنة
+            loadStoredData();
+            
+            // ربط الأحداث
+            urlInput.addEventListener('input', showPreview);
+            urlInput.addEventListener('paste', () => setTimeout(showPreview, 100));
+            startBtn.addEventListener('click', startRefresh);
+            stopBtn.addEventListener('click', stopRefresh);
+            
+            // التأكد من حالة النظام
+            updateSystemStatus(false);
+        });
+
+        // حفظ البيانات عند إغلاق الصفحة
+        window.addEventListener('beforeunload', saveData);
     </script>
 </body>
 </html>
