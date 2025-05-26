@@ -1,690 +1,293 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, addDoc, getDocs, doc, setDoc, onSnapshot, query, where, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { ArrowLeft, PlusCircle, Trash2, FileText, CheckCircle, AlertTriangle, Loader2, Settings, BookOpen, BarChart2, ExternalLink, Paperclip, FileType, Link2, Image as ImageIcon, UploadCloud } from 'lucide-react';
-
-// --- Firebase Configuration ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "YOUR_API_KEY", 
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'creative-arbitration-expert-v3';
-
-// --- Initialize Firebase ---
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// --- Helper function to convert file to base64 ---
-const fileToBase64 = (file) => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = () => resolve(reader.result?.toString().split(',')[1]); // Get only base64 part
-  reader.onerror = error => reject(error);
-});
-
-// --- Main App Component ---
-function App() {
-  const [currentView, setCurrentView] = useState('dashboard');
-  const [criteria, setCriteria] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [selectedProjectReport, setSelectedProjectReport] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-
-  // --- Authentication ---
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserId(user.uid);
-        console.log("User is signed in with UID:", user.uid);
-      } else {
-        console.log("User is signed out. Attempting sign-in.");
-        try {
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (error) {
-          console.error("Error during sign-in:", error);
-          setError("فشل المصادقة. لا يمكن مزامنة البيانات.");
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة مواعيد أشرف مفيد</title>
+    <style>
+        body {
+            background-color: #1e3a8a;
+            color: white;
+            font-family: Arial, sans-serif;
+            direction: rtl;
+            margin: 0;
+            padding: 20px;
         }
-      }
-      setIsAuthReady(true);
-    });
-    return () => unsubscribe();
-  }, []);
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .days {
+            margin-bottom: 20px;
+        }
+        .day-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .day, .notes-button {
+            background-color: #2d4b9e;
+            padding: 15px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+            position: relative;
+        }
+        .day.important::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 10px;
+            height: 10px;
+            background-color: red;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+        .day.normal::before {
+            content: '';
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            width: 10px;
+            height: 10px;
+            background-color: #00ff00;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .notes-container {
+            background-color: #2d4b9e;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .appointments {
+            background-color: #2d4b9e;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .appointment {
+            background-color: #3b5998;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button {
+            background-color: #c05621;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #d97706;
+        }
+        input, select, textarea {
+            padding: 8px;
+            margin: 5px;
+            border-radius: 5px;
+            border: none;
+        }
+        .form-container {
+            background-color: #2d4b9e;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .message {
+            background-color: #2ecc71;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>إدارة مواعيد أشرف مفيد</h1>
+        <div class="message" id="saveMessage">تم الحفظ بنجاح</div>
+        <div class="days" id="daysContainer">
+            <div class="day-row" id="firstRow"></div>
+            <div class="day-row" id="secondRow"></div>
+        </div>
+        <div class="notes-container" id="notesContainer">
+            <textarea id="notes" placeholder="اكتب ملاحظاتك هنا" rows="6" style="width: 100%;"></textarea>
+            <button onclick="saveNotes()">حفظ الملاحظات</button>
+        </div>
+        <div class="form-container">
+            <button onclick="showAddForm()">إضافة موعد</button>
+            <div id="addForm" style="display: none;">
+                <input type="date" id="appDate">
+                <input type="time" id="appTime">
+                <select id="appPriority">
+                    <option value="normal">عادي</option>
+                    <option value="important">مهم</option>
+                </select>
+                <textarea id="appDescription" placeholder="وصف الموعد" rows="4" style="width: 100%;"></textarea>
+                <button onclick="saveAppointment()">حفظ</button>
+            </div>
+        </div>
+        <div class="appointments" id="appointmentsContainer"></div>
+    </div>
 
-  // --- Firestore Collections References ---
-  const getCriteriaCollectionRef = useCallback(() => {
-    return collection(db, `artifacts/${appId}/public/data/arbitrationCriteria`);
-  }, []);
+    <script>
+        const days = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+        let appointments = JSON.parse(localStorage.getItem('appointments')) || {};
+        let notes = localStorage.getItem('notes') || '';
+        let selectedDay = null;
 
-  const getProjectsCollectionRef = useCallback(() => {
-    if (!userId) return null;
-    return collection(db, `artifacts/${appId}/users/${userId}/projects`);
-  }, [userId]);
+        function initDays() {
+            const firstRow = document.getElementById('firstRow');
+            const secondRow = document.getElementById('secondRow');
+            firstRow.innerHTML = '';
+            secondRow.innerHTML = '';
 
-  // --- Load Criteria ---
-  useEffect(() => {
-    if (!isAuthReady) return;
-    const criteriaCollectionRef = getCriteriaCollectionRef();
-    if (!criteriaCollectionRef) return;
-    setIsLoading(true);
-    const unsubscribe = onSnapshot(query(criteriaCollectionRef), (snapshot) => {
-      setCriteria(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setIsLoading(false);
-    }, (err) => {
-      console.error("Error fetching criteria:", err);
-      setError("فشل في تحميل معايير التحكيم.");
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
-  }, [isAuthReady, getCriteriaCollectionRef]);
+            days.forEach((day, index) => {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'day';
+                dayElement.textContent = day;
 
-  // --- Load Projects ---
-  useEffect(() => {
-    if (!isAuthReady || !userId) return;
-    const projectsCollectionRef = getProjectsCollectionRef();
-    if (!projectsCollectionRef) return;
-    setIsLoading(true);
-    const unsubscribe = onSnapshot(query(projectsCollectionRef), (snapshot) => {
-      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setIsLoading(false);
-    }, (err) => {
-      console.error("Error fetching projects:", err);
-      setError("فشل في تحميل المشاريع.");
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
-  }, [isAuthReady, userId, getProjectsCollectionRef]);
-
-  const handleAddCriterion = async (name, maxScore) => {
-    if (!name || !maxScore) { setError("اسم المعيار والدرجة القصوى مطلوبان."); return; }
-    if (!isAuthReady) { setError("المصادقة ليست جاهزة."); return; }
-    const criteriaCollectionRef = getCriteriaCollectionRef();
-    if (!criteriaCollectionRef) { setError("لا يمكن الوصول لمجموعة المعايير."); return; }
-    setIsLoading(true);
-    try {
-      await addDoc(criteriaCollectionRef, { name, maxScore: parseInt(maxScore) });
-      setError('');
-    } catch (err) { console.error("Error adding criterion:", err); setError("فشل في إضافة المعيار."); }
-    setIsLoading(false);
-  };
-
-  const handleDeleteCriterion = async (id) => {
-    if (!isAuthReady) { setError("المصادقة ليست جاهزة."); return; }
-    const criteriaCollectionRef = getCriteriaCollectionRef();
-    if (!criteriaCollectionRef) { setError("لا يمكن الوصول لمجموعة المعايير."); return; }
-    setIsLoading(true);
-    try { await deleteDoc(doc(criteriaCollectionRef, id)); } 
-    catch (err) { console.error("Error deleting criterion:", err); setError("فشل في حذف المعيار."); }
-    setIsLoading(false);
-  };
-
-  const handleAnalyzeProject = async (projectData) => {
-    const { projectName, projectDescription, uploadType, uploadedFileNameOrLink, uploadedFileBase64, uploadedFileMimeType } = projectData;
-
-    if (!projectName || !projectDescription) { setError("اسم المشروع ووصفه مطلوبان."); return; }
-    if (criteria.length === 0) { setError("يرجى تحديد معايير التحكيم أولاً."); return; }
-    if (!apiKey && !(typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__)) {
-       setShowApiKeyModal(true);
-       setError("مفتاح Gemini API مطلوب للتحليل. يرجى إدخاله في الإعدادات.");
-       return;
-    }
-    if (!isAuthReady || !userId) { setError("المصادقة أو معرّف المستخدم غير متوفر."); return; }
-    const projectsCollectionRef = getProjectsCollectionRef();
-    if (!projectsCollectionRef) { setError("لا يمكن الوصول لمجموعة المشاريع."); return; }
-
-    setIsLoading(true);
-    setError('');
-    const effectiveApiKey = apiKey || (typeof __GEMINI_API_KEY__ !== 'undefined' ? __GEMINI_API_KEY__ : "");
-
-    try {
-      const criteriaListFormatted = criteria.map(c => `- ${c.name} (الدرجة القصوى: ${c.maxScore})`).join('\n');
-      
-      let fileInfoForPrompt = '';
-      if (uploadType !== 'none' && uploadedFileNameOrLink) {
-        fileInfoForPrompt = `\n\nمعلومات الملف المرفق (لأخذها في الاعتبار عند التحليل):
-- نوع الملف: ${uploadType === 'image' ? 'صورة' : uploadType === 'pdf' ? 'PDF' : uploadType === 'word' ? 'Word' : 'رابط Google Drive'}
-- اسم الملف/الرابط: ${uploadedFileNameOrLink}`;
-      }
-      if (uploadType === 'image' && uploadedFileBase64) {
-        fileInfoForPrompt += `\n- (تم إرفاق بيانات الصورة لتحليلها بصريًا إذا أمكن)`;
-      }
-
-      const prompt = `أنت "خبير التحكيم الإبداعي"، وهو نظام ذكاء اصطناعي متقدم لتحليل وتقييم المشاريع الإبداعية.
-مهمتك هي تقديم تحليل احترافي ودقيق بناءً على المعلومات المقدمة.
-
-وصف المشروع الأساسي:
-"${projectDescription}"
-${fileInfoForPrompt}
-
-معايير التقييم المحددة من قبل المستخدم (مع الدرجات القصوى لكل معيار):
-${criteriaListFormatted}
-
-الرجاء تقديم الرد التالي حصريًا بتنسيق JSON، وباللغة العربية. يجب أن يكون التحليل موضوعيًا ومرتبطًا بالمعايير قدر الإمكان:
-1.  **ملخص المشروع (projectSummary):** قدم ملخصًا تنفيذيًا احترافيًا للمشروع. إذا تم إرفاق صورة، حاول دمج أي رؤى بصرية ذات صلة في هذا الملخص. إذا تم ذكر ملف PDF أو Word، افترض أنك اطلعت على محتواه (بناءً على اسمه ووصف المشروع) وقم بتضمين النقاط الرئيسية المفترضة.
-2.  **تقييم المعايير (criteriaFeedback):** لكل معيار من المعايير المذكورة أعلاه، قدم تقييمًا نوعيًا مفصلاً (feedback) يشرح مدى توافق المشروع مع هذا المعيار، مع الإشارة إلى نقاط القوة والضعف المحتملة. يجب أن يكون اسم المعيار (criterionName) مطابقًا تمامًا لما هو مذكور.
-3.  **التوصية الشاملة (recommendationText):** بناءً على التحليل الكلي، قدم توصية شاملة حول إمكانات المشروع، وأي اقتراحات للتحسين إذا كانت مناسبة.
-
-المخطط المطلوب لكائن JSON (تأكد من تطابقه تمامًا):
-{
-  "type": "OBJECT",
-  "properties": {
-    "projectSummary": { "type": "STRING", "description": "ملخص تنفيذي احترافي للمشروع باللغة العربية." },
-    "criteriaFeedback": {
-      "type": "ARRAY",
-      "description": "تقييم نوعي لكل معيار باللغة العربية.",
-      "items": {
-        "type": "OBJECT",
-        "properties": {
-          "criterionName": { "type": "STRING", "description": "اسم المعيار كما هو محدد." },
-          "feedback": { "type": "STRING", "description": "التقييم النوعي التفصيلي للمعيار باللغة العربية." }
-        },
-        "required": ["criterionName", "feedback"]
-      }
-    },
-    "recommendationText": { "type": "STRING", "description": "توصية شاملة ومفصلة باللغة العربية." }
-  },
-  "required": ["projectSummary", "criteriaFeedback", "recommendationText"]
-}`;
-      
-      const parts = [{ text: prompt }];
-      if (uploadType === 'image' && uploadedFileBase64 && uploadedFileMimeType) {
-        parts.push({
-          inlineData: {
-            mimeType: uploadedFileMimeType,
-            data: uploadedFileBase64
-          }
-        });
-      }
-
-      const payload = {
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              projectSummary: { type: "STRING" },
-              criteriaFeedback: {
-                type: "ARRAY",
-                items: {
-                  type: "OBJECT",
-                  properties: {
-                    criterionName: { type: "STRING" },
-                    feedback: { type: "STRING" }
-                  },
-                  required: ["criterionName", "feedback"]
+                if (hasImportantAppointment(index)) {
+                    dayElement.classList.add('important');
                 }
-              },
-              recommendationText: { type: "STRING" }
-            },
-            required: ["projectSummary", "criteriaFeedback", "recommendationText"]
-          }
+                if (hasNormalAppointment(index)) {
+                    dayElement.classList.add('normal');
+                }
+
+                dayElement.onclick = () => showAppointments(index);
+
+                if (index < 4) {
+                    firstRow.appendChild(dayElement);
+                } else if (index < 7) {
+                    secondRow.appendChild(dayElement);
+                }
+            });
+
+            const notesButton = document.createElement('div');
+            notesButton.className = 'notes-button';
+            notesButton.textContent = 'ملاحظات';
+            notesButton.onclick = toggleNotes;
+            secondRow.appendChild(notesButton);
         }
-      };
 
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${effectiveApiKey}`;
-      const apiResponse = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+        function hasImportantAppointment(dayIndex) {
+            return appointments[dayIndex]?.some(app => app.priority === 'important') || false;
+        }
 
-      if (!apiResponse.ok) {
-        const errorResult = await apiResponse.json();
-        throw new Error(`خطأ Gemini API: ${errorResult.error?.message || apiResponse.statusText}`);
-      }
-      const result = await apiResponse.json();
-      let aiGeneratedContent;
-      if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-        try { aiGeneratedContent = JSON.parse(result.candidates[0].content.parts[0].text); } 
-        catch (e) { console.error("Raw AI JSON:", result.candidates[0].content.parts[0].text); throw new Error("فشل تحليل استجابة AI JSON."); }
-      } else { throw new Error("استجابة غير متوقعة من Gemini API."); }
-      
-      let totalScore = 0;
-      const evaluatedCriteria = criteria.map(criterion => {
-        const scoreGiven = Math.floor(Math.random() * (criterion.maxScore + 1)); // Simulated score
-        totalScore += scoreGiven;
-        const aiFeedbackItem = aiGeneratedContent.criteriaFeedback?.find(f => f.criterionName === criterion.name);
-        const feedbackText = aiFeedbackItem ? aiFeedbackItem.feedback : "لم يتم تقديم تقييم لهذا المعيار من قبل الذكاء الاصطناعي.";
-        return { id: criterion.id, name: criterion.name, maxScore: criterion.maxScore, scoreGiven, feedback: feedbackText };
-      });
+        function hasNormalAppointment(dayIndex) {
+            return appointments[dayIndex]?.some(app => app.priority === 'normal') || false;
+        }
 
-      const report = {
-        projectName, projectDescription,
-        uploadType, uploadedFileNameOrLink: uploadedFileNameOrLink || (uploadType === 'image' ? 'ملف صورة مرفق' : 'لا يوجد اسم ملف'),
-        summary: aiGeneratedContent.projectSummary || "لم يتمكن الذكاء الاصطناعي من توليد ملخص.",
-        recommendation: aiGeneratedContent.recommendationText || "لم يتمكن الذكاء الاصطناعي من توليد توصية.",
-        criteria: evaluatedCriteria, totalScore,
-        overallMaxScore: criteria.reduce((sum, c) => sum + c.maxScore, 0),
-        evaluatedAt: serverTimestamp(), userId
-      };
+        function toggleNotes() {
+            const notesContainer = document.getElementById('notesContainer');
+            const notesTextarea = document.getElementById('notes');
+            notesTextarea.value = notes;
+            notesContainer.style.display = notesContainer.style.display === 'block' ? 'none' : 'block';
+        }
 
-      const docRef = await addDoc(projectsCollectionRef, report);
-      setSelectedProjectReport({ id: docRef.id, ...report });
-      setCurrentView('report');
-    } catch (err) { console.error("Error analyzing project:", err); setError(`فشل تحليل المشروع: ${err.message}`); }
-    setIsLoading(false);
-  };
-  
-  const handleSaveApiKey = (newApiKey) => {
-    setApiKey(newApiKey);
-    localStorage.setItem('geminiApiKey', newApiKey);
-    setShowApiKeyModal(false);
-    setError('');
-  };
+        function saveNotes() {
+            notes = document.getElementById('notes').value;
+            localStorage.setItem('notes', notes);
+            showMessage();
+            toggleNotes();
+        }
 
-  useEffect(() => {
-    const storedApiKey = localStorage.getItem('geminiApiKey');
-    if (storedApiKey) setApiKey(storedApiKey);
-  }, []);
+        function showAddForm() {
+            document.getElementById('addForm').style.display = 'block';
+        }
 
-  const renderView = () => {
-    switch (currentView) {
-      case 'criteria': return <CriteriaManagement criteria={criteria} onAddCriterion={handleAddCriterion} onDeleteCriterion={handleDeleteCriterion} setCurrentView={setCurrentView} />;
-      case 'newProject': return <NewProjectForm onAnalyzeProject={handleAnalyzeProject} setCurrentView={setCurrentView} criteriaDefined={criteria.length > 0} />;
-      case 'report': return <ReportView report={selectedProjectReport} setCurrentView={setCurrentView} />;
-      case 'projectList': return <ProjectList projects={projects} setCurrentView={setCurrentView} setSelectedProjectReport={setSelectedProjectReport} />;
-      default: return <Dashboard setCurrentView={setCurrentView} projectCount={projects.length} criteriaCount={criteria.length} setShowApiKeyModal={setShowApiKeyModal} userId={userId} />;
-    }
-  };
+        function saveAppointment() {
+            const date = document.getElementById('appDate').value;
+            const time = document.getElementById('appTime').value;
+            const priority = document.getElementById('appPriority').value;
+            const description = document.getElementById('appDescription').value;
 
-  if (!isAuthReady) {
-    return (
-      <div className="min-h-screen bg-green-100 flex flex-col items-center justify-center text-green-800 p-4 font-[system-ui]">
-        <Loader2 className="h-12 w-12 animate-spin text-emerald-500 mb-4" />
-        <p className="text-xl">جاري تهيئة التطبيق والمصادقة...</p>
-      </div>
-    );
-  }
+            if (!date || !time) return;
 
-  return (
-    <div className="min-h-screen bg-green-100 text-green-900 flex flex-col items-center p-4 font-[system-ui]" dir="rtl">
-      <div className="w-full max-w-4xl">
-        <header className="mb-8 flex items-center justify-between">
-          <img 
-            src="https://placehold.co/130x50/22c55e/ffffff?text=LEOMEDIA&font=sans" 
-            alt="شعار شركة ليوميديا" 
-            className="h-12 rounded"
-            onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/130x50/cccccc/000000?text=Logo+Error'; }}
-          />
-          <div className="text-center flex-grow">
-            <h1 className="text-4xl font-bold text-emerald-700">خبير التحكيم الإبداعي</h1>
-            <p className="text-green-700 mt-2">برنامج ذكي لتحليل المشاريع الإبداعية وتقييمها بموضوعية</p>
-          </div>
-          <div className="w-[130px]"></div> {/* Spacer to balance the logo */}
-        </header>
+            const dateObj = new Date(date);
+            const dayIndex = (dateObj.getDay() + 1) % 7;
 
-        {isLoading && (
-          <div className="fixed inset-0 bg-green-900 bg-opacity-50 flex items-center justify-center z-50">
-            <Loader2 className="h-16 w-16 animate-spin text-emerald-400" />
-            <p className="mr-4 text-xl text-white">جاري المعالجة...</p>
-          </div>
-        )}
+            if (!appointments[dayIndex]) appointments[dayIndex] = [];
+            appointments[dayIndex].push({ date, time, priority, description });
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 p-4 rounded-lg mb-6 flex items-center justify-between">
-            <div className="flex items-center"> <AlertTriangle className="h-6 w-6 ml-3" /> <span>{error}</span> </div>
-            <button onClick={() => setError('')} className="text-red-600 hover:text-red-800 font-bold">&times;</button>
-          </div>
-        )}
-        
-        {showApiKeyModal && <ApiKeyModal onSave={handleSaveApiKey} onClose={() => setShowApiKeyModal(false)} currentApiKey={apiKey} />}
+            localStorage.setItem('appointments', JSON.stringify(appointments));
 
-        <main className="bg-white shadow-2xl rounded-xl p-6 md:p-8">
-          {renderView()}
-        </main>
-        
-        <footer className="mt-12 text-center text-green-700 text-sm">
-          <p>&copy; {new Date().getFullYear()} خبير التحكيم الإبداعي. جميع الحقوق محفوظة (نموذج أولي).</p>
-          <p className="text-xs mt-1">مطور ومشغل بواسطة شركة ليوميديا</p>
-          {userId && <p className="text-xs mt-1">معرف المستخدم: {userId}</p>}
-          <p className="text-xs mt-1">معرف التطبيق: {appId}</p>
-        </footer>
-      </div>
-    </div>
-  );
-}
+            document.getElementById('addForm').style.display = 'none';
+            document.getElementById('appDate').value = '';
+            document.getElementById('appTime').value = '';
+            document.getElementById('appPriority').value = 'normal';
+            document.getElementById('appDescription').value = '';
 
-// --- Dashboard View ---
-const Dashboard = ({ setCurrentView, projectCount, criteriaCount, setShowApiKeyModal, userId }) => {
-  return (
-    <div className="text-center">
-      <h2 className="text-3xl font-semibold text-emerald-600 mb-8">لوحة التحكم الرئيسية</h2>
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        <DashboardCard title="إدارة معايير التحكيم" description={`لديك ${criteriaCount} معايير. قم بإضافة أو تعديلها.`} icon={<Settings className="h-10 w-10 text-orange-500" />} buttonText="الانتقال إلى المعايير" onClick={() => setCurrentView('criteria')} />
-        <DashboardCard title="تقييم مشروع جديد" description="ابدأ تقييم مشروع إبداعي جديد." icon={<PlusCircle className="h-10 w-10 text-orange-500" />} buttonText="بدء تقييم جديد" onClick={() => setCurrentView('newProject')} disabled={criteriaCount === 0} disabledText="يرجى تحديد المعايير أولاً" />
-        <DashboardCard title="عرض المشاريع المقيمة" description={`تم تقييم ${projectCount} مشاريع. استعرض التقارير.`} icon={<BookOpen className="h-10 w-10 text-orange-500" />} buttonText="عرض قائمة المشاريع" onClick={() => setCurrentView('projectList')} />
-        <DashboardCard title="إعدادات API" description="إدارة مفتاح Gemini API للتحليل الذكي." icon={<ExternalLink className="h-10 w-10 text-orange-500" />} buttonText="إعدادات المفتاح" onClick={() => setShowApiKeyModal(true)} />
-      </div>
-      {!userId && <p className="text-amber-600 text-sm">جاري تسجيل الدخول...</p>}
-    </div>
-  );
-};
+            showMessage();
+            initDays();
+            if (selectedDay === dayIndex) showAppointments(dayIndex);
+        }
 
-const DashboardCard = ({ title, description, icon, buttonText, onClick, disabled, disabledText }) => (
-  <div className="bg-green-50 p-6 rounded-lg shadow-lg border border-green-200 flex flex-col justify-between">
-    <div>
-      <div className="flex items-center text-emerald-600 mb-3"> {icon} <h3 className="text-xl font-semibold mr-3">{title}</h3> </div>
-      <p className="text-green-700 text-sm mb-4">{description}</p>
-    </div>
-    <button onClick={onClick} disabled={disabled} className={`w-full mt-auto ${disabled ? 'bg-slate-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'} text-white font-semibold py-2 px-4 rounded-md transition`}> {buttonText} </button>
-    {disabled && disabledText && <p className="text-xs text-amber-600 mt-2 text-center">{disabledText}</p>}
-  </div>
-);
+        function showAppointments(dayIndex) {
+            selectedDay = dayIndex;
+            const container = document.getElementById('appointmentsContainer');
+            container.innerHTML = '';
 
-// --- Criteria Management View ---
-const CriteriaManagement = ({ criteria, onAddCriterion, onDeleteCriterion, setCurrentView }) => {
-  const [name, setName] = useState('');
-  const [maxScore, setMaxScore] = useState('');
-  const handleSubmit = (e) => { e.preventDefault(); if (!name.trim() || !maxScore.trim() || isNaN(parseInt(maxScore)) || parseInt(maxScore) <= 0) { alert("يرجى إدخال اسم صالح ودرجة قصوى رقمية أكبر من صفر."); return; } onAddCriterion(name, parseInt(maxScore)); setName(''); setMaxScore(''); };
-  return (
-    <div>
-      <BackButton onClick={() => setCurrentView('dashboard')} />
-      <h2 className="text-2xl font-semibold text-emerald-600 mb-6">إدارة معايير التحكيم</h2>
-      <form onSubmit={handleSubmit} className="mb-8 p-6 bg-green-50 rounded-lg shadow-md border border-green-200">
-        <div className="grid md:grid-cols-3 gap-4 items-end">
-          <div className="md:col-span-2">
-            <label htmlFor="criterionName" className="block text-sm font-medium text-green-700 mb-1">اسم المعيار</label>
-            <input type="text" id="criterionName" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: الأصالة والإبداع" className="w-full p-3 bg-white border border-green-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 placeholder-slate-400 text-green-800" required />
-          </div>
-          <div>
-            <label htmlFor="maxScore" className="block text-sm font-medium text-green-700 mb-1">الدرجة القصوى</label>
-            <input type="number" id="maxScore" value={maxScore} onChange={(e) => setMaxScore(e.target.value)} placeholder="مثال: 20" className="w-full p-3 bg-white border border-green-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 placeholder-slate-400 text-green-800" required min="1" />
-          </div>
-        </div>
-        <button type="submit" className="mt-6 w-full md:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-6 rounded-md transition flex items-center justify-center"> <PlusCircle className="h-5 w-5 ml-2" /> إضافة معيار </button>
-      </form>
-      <h3 className="text-xl font-semibold text-emerald-500 mb-4">المعايير المحددة حاليًا:</h3>
-      {criteria.length === 0 ? <p className="text-green-600">لم يتم تحديد أي معايير بعد.</p> : (
-        <ul className="space-y-3">
-          {criteria.map(c => (
-            <li key={c.id} className="flex justify-between items-center bg-green-100 p-4 rounded-md shadow border border-green-200">
-              <div> <span className="font-medium text-green-800">{c.name}</span> <span className="text-sm text-green-600 mr-2">(الدرجة القصوى: {c.maxScore})</span> </div>
-              <button onClick={() => onDeleteCriterion(c.id)} className="text-red-500 hover:text-red-700 transition"> <Trash2 className="h-5 w-5" /> </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
+            if (appointments[dayIndex]?.length) {
+                appointments[dayIndex].forEach((app, index) => {
+                    const el = document.createElement('div');
+                    el.className = 'appointment';
+                    el.innerHTML = `
+                        ${app.date} ${app.time} - ${app.priority === 'important' ? 'مهم' : 'عادي'}<br>
+                        ${app.description || 'لا يوجد وصف'}
+                        <button onclick="editAppointment(${dayIndex}, ${index})">تعديل</button>
+                        <button onclick="deleteAppointment(${dayIndex}, ${index})">حذف</button>
+                    `;
+                    container.appendChild(el);
+                });
+            } else {
+                container.textContent = 'لا توجد مواعيد لهذا اليوم';
+            }
+        }
 
-// --- New Project Form View ---
-const NewProjectForm = ({ onAnalyzeProject, setCurrentView, criteriaDefined }) => {
-  const [projectName, setProjectName] = useState('');
-  const [projectDescription, setProjectDescription] = useState('');
-  const [uploadType, setUploadType] = useState('none'); // 'pdf', 'word', 'drive', 'image', 'none'
-  const [uploadedFileNameOrLink, setUploadedFileNameOrLink] = useState('');
-  const [uploadedFile, setUploadedFile] = useState(null); // For actual file object (image)
-  const [uploadedFileBase64, setUploadedFileBase64] = useState('');
-  const [uploadedFileMimeType, setUploadedFileMimeType] = useState('');
-  const [fileInputKey, setFileInputKey] = useState(Date.now()); // To reset file input
+        function editAppointment(dayIndex, index) {
+            const app = appointments[dayIndex][index];
+            document.getElementById('appDate').value = app.date;
+            document.getElementById('appTime').value = app.time;
+            document.getElementById('appPriority').value = app.priority;
+            document.getElementById('appDescription').value = app.description || '';
+            document.getElementById('addForm').style.display = 'block';
 
-  const handleFileChange = async (event) => {
-    const file = event.target.files[0];
-    if (file && uploadType === 'image') {
-      if (file.size > 4 * 1024 * 1024) { // Limit image size (e.g., 4MB for Gemini)
-        alert("حجم الصورة كبير جدًا. يرجى اختيار صورة أصغر (أقل من 4 ميجابايت).");
-        setUploadedFile(null);
-        setUploadedFileNameOrLink('');
-        setUploadedFileBase64('');
-        setUploadedFileMimeType('');
-        setFileInputKey(Date.now()); // Reset file input
-        return;
-      }
-      setUploadedFile(file);
-      setUploadedFileNameOrLink(file.name);
-      try {
-        const base64 = await fileToBase64(file);
-        setUploadedFileBase64(base64);
-        setUploadedFileMimeType(file.type);
-      } catch (error) {
-        console.error("Error converting file to base64:", error);
-        alert("حدث خطأ أثناء معالجة الصورة.");
-        setUploadedFileBase64('');
-        setUploadedFileMimeType('');
-      }
-    } else { // For other types or if no file selected
-        setUploadedFile(null);
-        // Keep uploadedFileNameOrLink if user is typing for PDF/Word/Drive
-    }
-  };
-  
-  const handleUploadTypeChange = (type) => {
-    setUploadType(type);
-    setUploadedFileNameOrLink('');
-    setUploadedFile(null);
-    setUploadedFileBase64('');
-    setUploadedFileMimeType('');
-    setFileInputKey(Date.now()); // Reset file input when type changes
-  };
+            appointments[dayIndex].splice(index, 1);
+            localStorage.setItem('appointments', JSON.stringify(appointments));
+            initDays();
+            showAppointments(dayIndex);
+        }
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (uploadType === 'image' && !uploadedFileBase64) {
-        alert("يرجى اختيار ملف صورة أو تغيير نوع الإرفاق.");
-        return;
-    }
-    onAnalyzeProject({ 
-        projectName, 
-        projectDescription, 
-        uploadType, 
-        uploadedFileNameOrLink, // This will be file name for image, or link/name for others
-        uploadedFileBase64, // Only for images
-        uploadedFileMimeType // Only for images
-    });
-  };
+        function deleteAppointment(dayIndex, index) {
+            if (!confirm('هل أنت متأكد من حذف هذا الموعد؟')) return;
+            appointments[dayIndex].splice(index, 1);
+            if (appointments[dayIndex].length === 0) delete appointments[dayIndex];
+            localStorage.setItem('appointments', JSON.stringify(appointments));
+            showMessage();
+            initDays();
+            showAppointments(dayIndex);
+        }
 
-  const FileUploadButton = ({ type, icon, label }) => (
-    <button
-      type="button"
-      onClick={() => handleUploadTypeChange(type)}
-      className={`flex-1 p-2 rounded-md border-2 transition-all duration-150 ease-in-out flex items-center justify-center space-x-2 space-x-reverse ${uploadType === type ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-green-100 hover:bg-green-200 text-emerald-700 border-green-300'}`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-  
-  if (!criteriaDefined) {
-      return (
-          <div className="text-center p-6 bg-green-50 rounded-lg border border-green-200">
-              <BackButton onClick={() => setCurrentView('dashboard')} />
-              <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-amber-600 mb-2">تنبيه</h2>
-              <p className="text-green-700 mb-4"> يجب تحديد معايير التحكيم أولاً قبل إضافة مشروع جديد للتقييم. </p>
-              <button onClick={() => setCurrentView('criteria')} className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-6 rounded-md transition"> الانتقال إلى صفحة المعايير </button>
-          </div>
-      );
-  }
+        function showMessage() {
+            const message = document.getElementById('saveMessage');
+            message.style.display = 'block';
+            setTimeout(() => message.style.display = 'none', 2000);
+        }
 
-  return (
-    <div>
-      <BackButton onClick={() => setCurrentView('dashboard')} />
-      <h2 className="text-2xl font-semibold text-emerald-600 mb-6">تقييم مشروع جديد</h2>
-      <form onSubmit={handleSubmit} className="space-y-6 p-6 bg-green-50 rounded-lg shadow-md border border-green-200">
-        <div>
-          <label htmlFor="projectName" className="block text-sm font-medium text-green-700 mb-1">اسم المشروع</label>
-          <input type="text" id="projectName" value={projectName} onChange={(e) => setProjectName(e.target.value)} placeholder="مثال: نظام إدارة التعلم المبتكر" className="w-full p-3 bg-white border border-green-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 placeholder-slate-400 text-green-800" required />
-        </div>
-        <div>
-          <label htmlFor="projectDescription" className="block text-sm font-medium text-green-700 mb-1">وصف المشروع (مهم للتحليل)</label>
-          <textarea id="projectDescription" value={projectDescription} onChange={(e) => setProjectDescription(e.target.value)} rows="5" placeholder="قدم وصفًا تفصيليًا للمشروع، أهدافه، وميزاته الرئيسية..." className="w-full p-3 bg-white border border-green-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 placeholder-slate-400 text-green-800" required ></textarea>
-        </div>
-
-        <div className="space-y-3">
-            <label className="block text-sm font-medium text-green-700">إرفاق ملف المشروع (اختياري):</label>
-            <div className="flex flex-wrap gap-2">
-                <FileUploadButton type="pdf" icon={<FileType className="h-5 w-5"/>} label="ملف PDF" />
-                <FileUploadButton type="word" icon={<FileType className="h-5 w-5"/>} label="ملف Word" />
-                <FileUploadButton type="drive" icon={<Link2 className="h-5 w-5"/>} label="رابط Google Drive" />
-                <FileUploadButton type="image" icon={<ImageIcon className="h-5 w-5"/>} label="صورة" />
-            </div>
-
-            {uploadType === 'image' && (
-                <div className="mt-3 p-3 border border-dashed border-emerald-400 rounded-md text-center bg-green-50">
-                    <label htmlFor="imageUpload" className="cursor-pointer text-emerald-600 hover:text-emerald-700">
-                        <UploadCloud className="h-8 w-8 mx-auto mb-2"/>
-                        {uploadedFileNameOrLink ? `الملف المحدد: ${uploadedFileNameOrLink}` : "انقر هنا لرفع صورة (أقل من 4MB)"}
-                    </label>
-                    <input 
-                        type="file" 
-                        id="imageUpload"
-                        key={fileInputKey} // Used to reset the input
-                        className="hidden"
-                        accept="image/png, image/jpeg, image/gif, image/webp"
-                        onChange={handleFileChange}
-                    />
-                    {uploadedFileBase64 && <img src={`data:${uploadedFileMimeType};base64,${uploadedFileBase64}`} alt="معاينة الصورة المرفوعة" className="mt-3 max-h-40 mx-auto rounded"/>}
-                </div>
-            )}
-
-            {(uploadType === 'pdf' || uploadType === 'word' || uploadType === 'drive') && (
-                <div className="mt-2">
-                    <input 
-                        type="text" 
-                        value={uploadedFileNameOrLink}
-                        onChange={(e) => setUploadedFileNameOrLink(e.target.value)}
-                        placeholder={
-                            uploadType === 'drive' ? "ادخل رابط جوجل درايف هنا" : 
-                            `ادخل اسم ملف ${uploadType === 'pdf' ? 'PDF' : 'Word'} هنا (مع الامتداد)`
-                        }
-                        className="w-full p-3 bg-white border border-green-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 placeholder-slate-400 text-green-800" 
-                    />
-                </div>
-            )}
-        </div>
-
-        <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-md transition flex items-center justify-center"> <BarChart2 className="h-5 w-5 ml-2" /> قم بالفحص والتحكيم </button>
-      </form>
-    </div>
-  );
-};
-
-// --- Report View ---
-const ReportView = ({ report, setCurrentView }) => {
-  if (!report) { return ( <div className="text-center p-6"> <BackButton onClick={() => setCurrentView('projectList')} /> <p className="text-green-600">لم يتم تحديد تقرير لعرضه.</p> </div> ); }
-  const percentageScore = report.overallMaxScore > 0 ? (report.totalScore / report.overallMaxScore * 100).toFixed(1) : 0;
-  return (
-    <div className="p-2 md:p-6 bg-green-50 rounded-lg shadow-xl border border-green-200">
-      <BackButton onClick={() => setCurrentView('projectList')} />
-      <div className="text-center mb-8">
-        <FileText className="h-16 w-16 text-emerald-500 mx-auto mb-3" />
-        <h2 className="text-3xl font-bold text-emerald-600">تقرير تقييم المشروع: {report.projectName}</h2>
-        {report.evaluatedAt?.toDate && <p className="text-sm text-green-600 mt-1">تاريخ التقييم: {report.evaluatedAt.toDate().toLocaleDateString('ar-SA')}</p>}
-      </div>
-
-      <div className="mb-6">
-        <h3 className="text-xl font-semibold text-orange-600 mb-2 border-b-2 border-orange-500 pb-1">ملخص المشروع (AI)</h3>
-        <p className="text-green-800 leading-relaxed whitespace-pre-wrap">{report.summary}</p>
-      </div>
-      
-      {report.uploadType && report.uploadType !== 'none' && report.uploadedFileNameOrLink && (
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold text-orange-600 mb-2 border-b-2 border-orange-500 pb-1">الملف المرفق</h3>
-          <p className="text-green-800">
-            النوع: {report.uploadType === 'pdf' ? 'PDF' : report.uploadType === 'word' ? 'Word' : report.uploadType === 'drive' ? 'Google Drive' : 'صورة'}
-            <br/>
-            {report.uploadType === 'drive' ? 'الرابط: ' : 'اسم الملف: '} 
-            <span className="font-mono">{report.uploadedFileNameOrLink}</span>
-          </p>
-        </div>
-      )}
-
-      <div className="mb-6">
-        <h3 className="text-xl font-semibold text-orange-600 mb-3 border-b-2 border-orange-500 pb-1">تقييم المعايير</h3>
-        <div className="space-y-4">
-          {report.criteria.map(criterion => (
-            <div key={criterion.id || criterion.name} className="bg-green-100 p-4 rounded-md border border-green-200">
-              <div className="flex justify-between items-center mb-1">
-                <h4 className="text-lg font-medium text-emerald-600">{criterion.name}</h4>
-                <span className="font-semibold text-emerald-600">{criterion.scoreGiven} / {criterion.maxScore}</span>
-              </div>
-              <p className="text-sm text-green-700 italic">التقييم النوعي: {criterion.feedback || "لا يوجد."}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      <div className="mb-6 bg-green-100 p-4 rounded-lg border border-green-200">
-        <h3 className="text-xl font-semibold text-orange-600 mb-2">النتيجة الإجمالية</h3>
-        <div className="flex items-center justify-between text-2xl font-bold"> <span className="text-green-800">الدرجة الكلية:</span> <span className="text-emerald-500">{report.totalScore} من {report.overallMaxScore}</span> </div>
-        <div className="w-full bg-green-200 rounded-full h-6 mt-3 overflow-hidden"> <div className="bg-emerald-500 h-6 rounded-full text-xs font-medium text-white text-center p-1 leading-none" style={{ width: `${percentageScore}%` }}> {percentageScore}% </div> </div>
-      </div>
-
-      <div className="mb-6">
-        <h3 className="text-xl font-semibold text-orange-600 mb-2 border-b-2 border-orange-500 pb-1">التوصية (AI)</h3>
-        <p className="text-green-800 leading-relaxed whitespace-pre-wrap">{report.recommendation}</p>
-      </div>
-
-      {report.projectDescription && ( <div className="mb-6"> <h3 className="text-xl font-semibold text-orange-600 mb-2 border-b-2 border-orange-500 pb-1">وصف المشروع الأصلي</h3> <p className="text-green-800 bg-green-100 p-3 rounded leading-relaxed whitespace-pre-wrap border border-green-200">{report.projectDescription}</p> </div> )}
-      <div className="text-center mt-8"> <button onClick={() => setCurrentView('projectList')} className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-6 rounded-md transition"> العودة إلى قائمة المشاريع </button> </div>
-    </div>
-  );
-};
-
-// --- Project List View ---
-const ProjectList = ({ projects, setCurrentView, setSelectedProjectReport }) => {
-  if (projects.length === 0) { return ( <div className="text-center p-6"> <BackButton onClick={() => setCurrentView('dashboard')} /> <BookOpen className="h-12 w-12 text-emerald-500 mx-auto mb-4" /> <h2 className="text-xl font-semibold text-emerald-600 mb-2">قائمة المشاريع المقيمة</h2> <p className="text-green-600 mb-4">لم يتم تقييم أي مشاريع بعد.</p> <button onClick={() => setCurrentView('newProject')} className="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 px-6 rounded-md transition"> تقييم مشروع جديد </button> </div> ); }
-  return (
-    <div>
-      <BackButton onClick={() => setCurrentView('dashboard')} />
-      <h2 className="text-2xl font-semibold text-emerald-600 mb-6">المشاريع المقيمة</h2>
-      <div className="space-y-4">
-        {projects.sort((a,b) => (b.evaluatedAt?.seconds || 0) - (a.evaluatedAt?.seconds || 0)).map(project => (
-          <div key={project.id} className="bg-green-50 p-4 rounded-lg shadow-md border border-green-200 flex flex-col sm:flex-row justify-between items-start sm:items-center">
-            <div className="mb-3 sm:mb-0">
-              <h3 className="text-lg font-medium text-green-800">{project.projectName}</h3>
-              <p className="text-sm text-green-600"> الدرجة: {project.totalScore} / {project.overallMaxScore} {project.evaluatedAt?.toDate && ` - تاريخ التقييم: ${project.evaluatedAt.toDate().toLocaleDateString('ar-SA')}`} </p>
-            </div>
-            <button onClick={() => { setSelectedProjectReport(project); setCurrentView('report'); }} className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-md transition text-sm flex items-center"> <FileText className="h-4 w-4 ml-2" /> عرض التقرير </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// --- API Key Modal ---
-const ApiKeyModal = ({ onSave, onClose, currentApiKey }) => {
-  const [inputApiKey, setInputApiKey] = useState(currentApiKey || '');
-  const handleSubmit = (e) => { e.preventDefault(); onSave(inputApiKey); };
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" dir="rtl">
-      <div className="bg-white p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-md">
-        <h2 className="text-2xl font-semibold text-emerald-600 mb-4">إعدادات مفتاح Gemini API</h2>
-        <p className="text-green-700 mb-6 text-sm"> للاستفادة من قدرات التحليل بالذكاء الاصطناعي، يرجى إدخال مفتاح Gemini API الخاص بك. يمكنك الحصول على مفتاح من <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">Google AI Studio</a>. لن يتم تخزين هذا المفتاح على خوادمنا (يُحفظ محليًا). </p>
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="apiKeyInput" className="block text-sm font-medium text-green-700 mb-1">مفتاح API</label>
-          <input type="password" id="apiKeyInput" value={inputApiKey} onChange={(e) => setInputApiKey(e.target.value)} className="w-full p-3 bg-green-50 border border-green-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500 placeholder-slate-400 text-green-800 mb-6" placeholder="أدخل مفتاح Gemini API هنا" />
-          <div className="flex justify-end space-x-3 space-x-reverse">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-md transition"> إلغاء </button>
-            <button type="submit" className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-md transition"> حفظ المفتاح </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// --- Helper Components ---
-const BackButton = ({ onClick }) => ( <button onClick={onClick} className="mb-6 flex items-center text-emerald-600 hover:text-emerald-700 transition"> <ArrowLeft className="h-5 w-5 ml-2" /> العودة </button> );
-
-export default App;
-
-
+        initDays();
+    </script>
+</body>
+</html>
