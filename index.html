@@ -1,293 +1,397 @@
 <!DOCTYPE html>
-<html lang="ar">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إدارة مواعيد أشرف مفيد</title>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>منظّم المواعيد - ملف واحد</title>
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            background-color: #1e3a8a;
-            color: white;
-            font-family: Arial, sans-serif;
-            direction: rtl;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .days {
-            margin-bottom: 20px;
-        }
-        .day-row {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .day, .notes-button {
-            background-color: #2d4b9e;
-            padding: 15px;
-            text-align: center;
-            border-radius: 5px;
-            cursor: pointer;
-            position: relative;
-        }
-        .day.important::after {
-            content: '';
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            width: 10px;
-            height: 10px;
-            background-color: red;
-            border-radius: 50%;
-            animation: blink 1s infinite;
-        }
-        .day.normal::before {
-            content: '';
-            position: absolute;
-            top: 5px;
-            left: 5px;
-            width: 10px;
-            height: 10px;
-            background-color: #00ff00;
-            border-radius: 50%;
-            animation: blink 1s infinite;
-        }
-        @keyframes blink {
-            0% { opacity: 1; }
-            50% { opacity: 0; }
-            100% { opacity: 1; }
-        }
-        .notes-container {
-            background-color: #2d4b9e;
-            padding: 20px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            display: none;
-        }
-        .appointments {
-            background-color: #2d4b9e;
-            padding: 20px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        .appointment {
-            background-color: #3b5998;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button {
-            background-color: #c05621;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-        }
-        button:hover {
-            background-color: #d97706;
-        }
-        input, select, textarea {
-            padding: 8px;
-            margin: 5px;
-            border-radius: 5px;
-            border: none;
-        }
-        .form-container {
-            background-color: #2d4b9e;
-            padding: 20px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-        }
-        .message {
-            background-color: #2ecc71;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            display: none;
-        }
+      body { font-feature-settings: "ss01" on; }
+      @keyframes redBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+      .flash-red { animation: redBlink 1s linear infinite; }
     </style>
-</head>
-<body>
-    <div class="container">
-        <h1>إدارة مواعيد أشرف مفيد</h1>
-        <div class="message" id="saveMessage">تم الحفظ بنجاح</div>
-        <div class="days" id="daysContainer">
-            <div class="day-row" id="firstRow"></div>
-            <div class="day-row" id="secondRow"></div>
-        </div>
-        <div class="notes-container" id="notesContainer">
-            <textarea id="notes" placeholder="اكتب ملاحظاتك هنا" rows="6" style="width: 100%;"></textarea>
-            <button onclick="saveNotes()">حفظ الملاحظات</button>
-        </div>
-        <div class="form-container">
-            <button onclick="showAddForm()">إضافة موعد</button>
-            <div id="addForm" style="display: none;">
-                <input type="date" id="appDate">
-                <input type="time" id="appTime">
-                <select id="appPriority">
-                    <option value="normal">عادي</option>
-                    <option value="important">مهم</option>
-                </select>
-                <textarea id="appDescription" placeholder="وصف الموعد" rows="4" style="width: 100%;"></textarea>
-                <button onclick="saveAppointment()">حفظ</button>
-            </div>
-        </div>
-        <div class="appointments" id="appointmentsContainer"></div>
-    </div>
+    <!-- React 18 UMD -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for in-browser JSX transform -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="min-h-screen w-full bg-blue-950 text-white antialiased">
+    <div id="root"></div>
 
-    <script>
-        const days = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-        let appointments = JSON.parse(localStorage.getItem('appointments')) || {};
-        let notes = localStorage.getItem('notes') || '';
-        let selectedDay = null;
+    <script type="text/babel">
+      const { useEffect, useMemo, useState } = React;
 
-        function initDays() {
-            const firstRow = document.getElementById('firstRow');
-            const secondRow = document.getElementById('secondRow');
-            firstRow.innerHTML = '';
-            secondRow.innerHTML = '';
+      // أيقونات SVG بسيطة (بديلة لـ lucide-react)
+      const Icon = {
+        Calendar: (props) => (
+          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+        ),
+        Bell: (props) => (
+          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 01-3.46 0"/>
+          </svg>
+        ),
+        BellOff: (props) => (
+          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13.73 21a2 2 0 01-3.46 0"/>
+            <path d="M18.63 13A17.89 17.89 0 0018 8a6 6 0 00-9.33-4.95"/>
+            <path d="M2 2l20 20"/>
+            <path d="M4.27 4.27A6 6 0 006 8c0 7-3 9-3 9h14"/>
+          </svg>
+        ),
+        Clock: (props) => (
+          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        ),
+        Trash: (props) => (
+          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+            <path d="M10 11v6"/>
+            <path d="M14 11v6"/>
+            <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+          </svg>
+        ),
+        Edit: (props) => (
+          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/>
+          </svg>
+        ),
+        Plus: (props) => (
+          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        ),
+      };
 
-            days.forEach((day, index) => {
-                const dayElement = document.createElement('div');
-                dayElement.className = 'day';
-                dayElement.textContent = day;
+      // أدوات مساعدة للتواريخ
+      const weekdayIndex = {
+        sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+      };
+      function fmtDate(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+      }
+      function nextDateForWeekday(key, from = new Date()) {
+        const target = weekdayIndex[key];
+        const d = new Date(from);
+        const cur = d.getDay();
+        const diff = (target - cur + 7) % 7; // يشمل اليوم إذا كان نفس اليوم
+        d.setDate(d.getDate() + diff);
+        return d;
+      }
+      function weekdayKeyFromDateStr(dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        const inv = Object.entries(weekdayIndex).find(([, v]) => v === d.getDay());
+        return inv ? inv[0] : 'monday';
+      }
 
-                if (hasImportantAppointment(index)) {
-                    dayElement.classList.add('important');
-                }
-                if (hasNormalAppointment(index)) {
-                    dayElement.classList.add('normal');
-                }
+      function AppointmentManager() {
+        const weekdays = [
+          { key: "saturday", label: "السبت" },
+          { key: "sunday", label: "الأحد" },
+          { key: "monday", label: "الاثنين" },
+          { key: "tuesday", label: "الثلاثاء" },
+          { key: "wednesday", label: "الأربعاء" },
+          { key: "thursday", label: "الخميس" },
+          { key: "friday", label: "الجمعة" },
+        ];
 
-                dayElement.onclick = () => showAppointments(index);
-
-                if (index < 4) {
-                    firstRow.appendChild(dayElement);
-                } else if (index < 7) {
-                    secondRow.appendChild(dayElement);
-                }
-            });
-
-            const notesButton = document.createElement('div');
-            notesButton.className = 'notes-button';
-            notesButton.textContent = 'ملاحظات';
-            notesButton.onclick = toggleNotes;
-            secondRow.appendChild(notesButton);
-        }
-
-        function hasImportantAppointment(dayIndex) {
-            return appointments[dayIndex]?.some(app => app.priority === 'important') || false;
-        }
-
-        function hasNormalAppointment(dayIndex) {
-            return appointments[dayIndex]?.some(app => app.priority === 'normal') || false;
-        }
-
-        function toggleNotes() {
-            const notesContainer = document.getElementById('notesContainer');
-            const notesTextarea = document.getElementById('notes');
-            notesTextarea.value = notes;
-            notesContainer.style.display = notesContainer.style.display === 'block' ? 'none' : 'block';
-        }
-
-        function saveNotes() {
-            notes = document.getElementById('notes').value;
-            localStorage.setItem('notes', notes);
-            showMessage();
-            toggleNotes();
-        }
-
-        function showAddForm() {
-            document.getElementById('addForm').style.display = 'block';
-        }
-
-        function saveAppointment() {
-            const date = document.getElementById('appDate').value;
-            const time = document.getElementById('appTime').value;
-            const priority = document.getElementById('appPriority').value;
-            const description = document.getElementById('appDescription').value;
-
-            if (!date || !time) return;
-
-            const dateObj = new Date(date);
-            const dayIndex = (dateObj.getDay() + 1) % 7;
-
-            if (!appointments[dayIndex]) appointments[dayIndex] = [];
-            appointments[dayIndex].push({ date, time, priority, description });
-
-            localStorage.setItem('appointments', JSON.stringify(appointments));
-
-            document.getElementById('addForm').style.display = 'none';
-            document.getElementById('appDate').value = '';
-            document.getElementById('appTime').value = '';
-            document.getElementById('appPriority').value = 'normal';
-            document.getElementById('appDescription').value = '';
-
-            showMessage();
-            initDays();
-            if (selectedDay === dayIndex) showAppointments(dayIndex);
-        }
-
-        function showAppointments(dayIndex) {
-            selectedDay = dayIndex;
-            const container = document.getElementById('appointmentsContainer');
-            container.innerHTML = '';
-
-            if (appointments[dayIndex]?.length) {
-                appointments[dayIndex].forEach((app, index) => {
-                    const el = document.createElement('div');
-                    el.className = 'appointment';
-                    el.innerHTML = `
-                        ${app.date} ${app.time} - ${app.priority === 'important' ? 'مهم' : 'عادي'}<br>
-                        ${app.description || 'لا يوجد وصف'}
-                        <button onclick="editAppointment(${dayIndex}, ${index})">تعديل</button>
-                        <button onclick="deleteAppointment(${dayIndex}, ${index})">حذف</button>
-                    `;
-                    container.appendChild(el);
-                });
-            } else {
-                container.textContent = 'لا توجد مواعيد لهذا اليوم';
+        const [appointments, setAppointments] = useState(() => {
+          const today = new Date();
+          try {
+            const raw = localStorage.getItem("appt_v1");
+            if (raw) {
+              const arr = JSON.parse(raw);
+              // ترقية النسخ القديمة: إضافة date إن كان مفقودًا
+              return arr.map(a => ({
+                ...a,
+                date: a.date || fmtDate(new Date()),
+                weekdayKey: a.weekdayKey || weekdayKeyFromDateStr(a.date || fmtDate(new Date())),
+              }));
             }
+          } catch {}
+          // بيانات تجريبية أولية مع تواريخ تناسب أيامها
+          return [
+            { id: crypto.randomUUID(), title: "اجتماع فريق ليو ميديا", time: "10:30", weekdayKey: "monday", date: fmtDate(nextDateForWeekday('monday', today)) },
+            { id: crypto.randomUUID(), title: "محاضرة تدريبية", time: "19:00", weekdayKey: "tuesday", date: fmtDate(nextDateForWeekday('tuesday', today)) },
+            { id: crypto.randomUUID(), title: "مراجعة محتوى", time: "13:15", weekdayKey: "thursday", date: fmtDate(nextDateForWeekday('thursday', today)) },
+          ];
+        });
+
+        useEffect(() => {
+          try { localStorage.setItem("appt_v1", JSON.stringify(appointments)); } catch {}
+        }, [appointments]);
+
+        // عند التحديث أو الريفريش: لا نعرض مواعيد حتى يُضغط على يوم
+        const [selectedDay, setSelectedDay] = useState(null);
+        const [flashEnabled, setFlashEnabled] = useState(true);
+
+        const emptyForm = { id: null, title: "", time: "", weekdayKey: "monday", date: fmtDate(new Date()) };
+        const [form, setForm] = useState(emptyForm);
+
+        const hasApptsByDay = useMemo(() => {
+          const map = new Map();
+          weekdays.forEach((d) => map.set(d.key, 0));
+          appointments.forEach((a) => map.set(a.weekdayKey, (map.get(a.weekdayKey) || 0) + 1));
+          return map; // key -> count
+        }, [appointments]);
+
+        const dayAppointments = useMemo(() => {
+          if (!selectedDay) return [];
+          return appointments
+            .filter((a) => a.weekdayKey === selectedDay)
+            .sort((a, b) => (a.date + ' ' + a.time).localeCompare(b.date + ' ' + b.time));
+        }, [appointments, selectedDay]);
+
+        function addAppointment(e) {
+          e.preventDefault();
+          if (!form.title.trim() || !form.time.trim() || !form.date) return;
+
+          // تأكيد مزامنة اليوم مع التاريخ المختار
+          const computedDay = weekdayKeyFromDateStr(form.date);
+          const payload = { id: form.id || crypto.randomUUID(), title: form.title.trim(), time: form.time.trim(), weekdayKey: computedDay, date: form.date };
+
+          if (form.id) {
+            setAppointments((prev) => prev.map((a) => (a.id === form.id ? payload : a)));
+          } else {
+            setAppointments((prev) => [...prev, payload]);
+          }
+
+          setForm({ ...emptyForm, weekdayKey: computedDay, date: form.date });
+          if (!selectedDay) setSelectedDay(computedDay);
         }
 
-        function editAppointment(dayIndex, index) {
-            const app = appointments[dayIndex][index];
-            document.getElementById('appDate').value = app.date;
-            document.getElementById('appTime').value = app.time;
-            document.getElementById('appPriority').value = app.priority;
-            document.getElementById('appDescription').value = app.description || '';
-            document.getElementById('addForm').style.display = 'block';
-
-            appointments[dayIndex].splice(index, 1);
-            localStorage.setItem('appointments', JSON.stringify(appointments));
-            initDays();
-            showAppointments(dayIndex);
+        function editAppointment(appt) {
+          setForm({ id: appt.id, title: appt.title, time: appt.time, weekdayKey: appt.weekdayKey, date: appt.date });
+          if (!selectedDay) setSelectedDay(appt.weekdayKey);
         }
 
-        function deleteAppointment(dayIndex, index) {
-            if (!confirm('هل أنت متأكد من حذف هذا الموعد؟')) return;
-            appointments[dayIndex].splice(index, 1);
-            if (appointments[dayIndex].length === 0) delete appointments[dayIndex];
-            localStorage.setItem('appointments', JSON.stringify(appointments));
-            showMessage();
-            initDays();
-            showAppointments(dayIndex);
+        function deleteAppointment(id) {
+          setAppointments((prev) => prev.filter((a) => a.id !== id));
+          if (form.id === id) setForm(emptyForm);
         }
 
-        function showMessage() {
-            const message = document.getElementById('saveMessage');
-            message.style.display = 'block';
-            setTimeout(() => message.style.display = 'none', 2000);
+        function onDateChange(newDate) {
+          const newKey = weekdayKeyFromDateStr(newDate);
+          setForm((f) => ({ ...f, date: newDate, weekdayKey: newKey }));
         }
 
-        initDays();
+        return (
+          <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+            {/* العنوان والشريط العلوي */}
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <Icon.Calendar className="w-7 h-7" aria-hidden />
+                <h1 className="text-2xl sm:text-3xl font-bold">منظّم المواعيد</h1>
+              </div>
+              <button
+                onClick={() => setFlashEnabled((v) => !v)}
+                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 transition px-4 py-2 rounded-2xl shadow"
+                aria-pressed={flashEnabled}
+                title={flashEnabled ? "إيقاف الوميض" : "تفعيل الوميض"}
+              >
+                {flashEnabled ? <Icon.Bell className="w-5 h-5" /> : <Icon.BellOff className="w-5 h-5" />}
+                <span className="hidden sm:inline">تنبيهات الوميض</span>
+              </button>
+            </div>
+
+            {/* شبكة أيام الأسبوع */}
+            <section aria-label="أيام الأسبوع" className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
+              {weekdays.map((d) => {
+                const isSelected = selectedDay === d.key;
+                const count = hasApptsByDay.get(d.key) || 0;
+                const has = count > 0;
+                return (
+                  <button
+                    key={d.key}
+                    onClick={() => setSelectedDay(d.key)}
+                    className={[
+                      "relative rounded-2xl px-4 py-5 text-center transition focus:outline-none focus:ring-2 focus:ring-white/60",
+                      isSelected ? "bg-white/10 ring-2 ring-white/60" : "bg-white/5 hover:bg-white/10",
+                    ].join(" ")}
+                    aria-pressed={isSelected}
+                  >
+                    <span className="block text-lg font-semibold">{d.label}</span>
+
+                    {/* لمبة حمراء وميضي */}
+                    {has && (
+                      <span
+                        className={[
+                          "absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-600",
+                          flashEnabled ? "flash-red" : "",
+                        ].join(" ")}
+                        aria-hidden
+                      />
+                    )}
+
+                    {/* دائرة خضراء بالعدد */}
+                    {has && (
+                      <span className="absolute -bottom-1 -left-1 min-w-[20px] h-5 px-1 rounded-full bg-green-500 text-xs font-bold flex items-center justify-center">
+                        {count}
+                      </span>
+                    )}
+
+                    {/* إطار أحمر خفيف */}
+                    {has && flashEnabled && (
+                      <span className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-red-600/70 flash-red" aria-hidden />
+                    )}
+                  </button>
+                );
+              })}
+            </section>
+
+            <div className="grid lg:grid-cols-5 gap-6 items-start">
+              {/* قائمة مواعيد اليوم */}
+              <section className="lg:col-span-3 bg-white/5 rounded-2xl p-4 sm:p-6 shadow min-h-[220px]">
+                <header className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <Icon.Clock className="w-5 h-5" />
+                    {selectedDay ? <>مواعيد يوم {weekdays.find(w => w.key === selectedDay)?.label}</> : <>اختر يومًا لعرض مواعيده</>}
+                  </h2>
+                  {selectedDay && (
+                    <span className="text-white/70 text-sm">({dayAppointments.length} موعد)</span>
+                  )}
+                </header>
+
+                {!selectedDay ? (
+                  <p className="text-white/70">لا توجد مواعيد معروضة الآن. اضغط على أي يوم بالأعلى لعرض مواعيده.</p>
+                ) : dayAppointments.length === 0 ? (
+                  <p className="text-white/70">لا توجد مواعيد لهذا اليوم بعد. أضِف موعدًا من النموذج على اليمين.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {dayAppointments.map((a) => (
+                      <li key={a.id} className="flex items-center justify-between bg-white/5 hover:bg-white/10 transition rounded-xl px-3 py-3">
+                        <div>
+                          <p className="font-semibold">{a.title}</p>
+                          <p className="text-white/70 text-sm">التاريخ: {a.date} — الوقت: {a.time}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => editAppointment(a)}
+                            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 active:scale-95 transition px-3 py-2 rounded-xl"
+                            title="تعديل الموعد"
+                          >
+                            <Icon.Edit className="w-4 h-4" /> تعديل
+                          </button>
+                          <button
+                            onClick={() => deleteAppointment(a.id)}
+                            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 transition px-3 py-2 rounded-xl"
+                            title="حذف الموعد"
+                          >
+                            <Icon.Trash className="w-4 h-4" /> حذف
+                          </button>
+                        </div>
+                      </li>) )}
+                  </ul>
+                )}
+              </section>
+
+              {/* نموذج إضافة/تعديل موعد */}
+              <aside className="lg:col-span-2 bg-white/5 rounded-2xl p-4 sm:p-6 shadow">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <Icon.Plus className="w-5 h-5" /> {form.id ? "تعديل موعد" : "إضافة موعد جديد"}
+                </h3>
+
+                <form onSubmit={addAppointment} className="space-y-4" autoComplete="off">
+                  <div>
+                    <label className="block mb-2 text-sm text-white/80" htmlFor="title">عنوان الموعد</label>
+                    <input
+                      id="title"
+                      type="text"
+                      required
+                      value={form.title}
+                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                      className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
+                      placeholder="مثال: اجتماع تخطيط المحتوى"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block mb-2 text-sm text-white/80" htmlFor="date">التاريخ</label>
+                      <input
+                        id="date"
+                        type="date"
+                        required
+                        value={form.date}
+                        onChange={(e) => onDateChange(e.target.value)}
+                        className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
+                      />
+                      <p className="mt-1 text-[11px] text-white/60">سيتم ضبط اليوم تلقائيًا وفقًا للتاريخ المختار.</p>
+                    </div>
+                    <div>
+                      <label className="block mb-2 text-sm text-white/80" htmlFor="weekday">اليوم</label>
+                      <select
+                        id="weekday"
+                        value={form.weekdayKey}
+                        onChange={(e) => setForm((f) => ({ ...f, weekdayKey: e.target.value }))}
+                        className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
+                      >
+                        {weekdays.map((d) => (
+                          <option key={d.key} value={d.key}>{d.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block mb-2 text-sm text-white/80" htmlFor="time">الوقت</label>
+                    <input
+                      id="time"
+                      type="time"
+                      required
+                      value={form.time}
+                      onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+                      className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      type="submit"
+                      className="bg-orange-500 hover:bg-orange-600 active:scale-95 transition px-5 py-2.5 rounded-2xl shadow font-semibold"
+                    >
+                      {form.id ? "تحديث الموعد" : "حفظ الموعد"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(emptyForm)}
+                      className="bg-white/10 hover:bg-white/20 active:scale-95 transition px-4 py-2.5 rounded-2xl shadow"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                </form>
+
+                <div className="mt-6 text-xs text-white/60 leading-relaxed">
+                  <p>• يمكنك الآن تحديد <strong>تاريخ</strong> لكل موعد، وسيتم احتسابه ضمن نفس يوم الأسبوع تلقائيًا.</p>
+                  <p>• عرض المواعيد يظل حسب <strong>اليوم</strong> المختار، مع فرز حسب التاريخ ثم الوقت.</p>
+                  <p>• التنبيه الأحمر يومض على الأيام التي تحتوي على مواعيد، ومعه دائرة خضراء توضح العدد.</p>
+                  <p>• يتم حفظ كل شيء محليًا على جهازك (LocalStorage).</p>
+                </div>
+              </aside>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<AppointmentManager />);
     </script>
-</body>
+  </body>
 </html>
