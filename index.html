@@ -1,397 +1,210 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>منظّم المواعيد - ملف واحد</title>
-    <!-- Tailwind CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      body { font-feature-settings: "ss01" on; }
-      @keyframes redBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
-      .flash-red { animation: redBlink 1s linear infinite; }
-    </style>
-    <!-- React 18 UMD -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel for in-browser JSX transform -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  </head>
-  <body class="min-h-screen w-full bg-blue-950 text-white antialiased">
-    <div id="root"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LEO-AI — صانع الصوت الافتراضي (مزود خارجي: Google / ElevenLabs)</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root { --bg:#0b1437; --card:#0f1a48; --accent:#f97316; --accent-2:#f59e0b; --text:#e6e9f5; --muted:#94a3b8; --danger:#ef4444; --ok:#22c55e; }
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto;background:radial-gradient(1200px 800px at 80% -10%, #1c2a69 0%, transparent 60%),radial-gradient(900px 700px at -10% 30%, #142053 0%, transparent 60%),var(--bg);color:var(--text)}
+    .container{max-width:1100px;margin:32px auto;padding:0 16px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:grid;place-items:center;font-weight:900;color:#0b0b0b;box-shadow:0 10px 24px rgba(249,115,22,.35)}
+    .title{font-size:20px;font-weight:800}
+    .muted{color:var(--muted);font-size:12px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:18px;box-shadow:0 12px 30px rgba(10,15,40,.35)}
+    textarea{width:100%;min-height:160px;resize:vertical;background:var(--card);color:var(--text);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px;font-size:16px}
+    label{display:block;font-size:12px;color:var(--muted);margin:8px 0 6px}
+    select,input[type=text],input[type=range]{width:100%;background:var(--card);color:var(--text);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px}
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .btn{padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;transition:transform .06s ease, box-shadow .3s ease}
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#0a0a0a}
+    .btn.secondary{background:#1c2a69;color:var(--text)}
+    .btn.danger{background:var(--danger);color:white}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#102058;border:1px solid rgba(255,255,255,.08);font-size:12px}
 
-    <script type="text/babel">
-      const { useEffect, useMemo, useState } = React;
+    /* Modal */
+    .settings-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50}
+    .settings-content{background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));padding:20px;border-radius:18px;max-width:520px;width:92%;border:1px solid rgba(255,255,255,.1)}
+    .settings-content textarea{min-height:80px}
 
-      // أيقونات SVG بسيطة (بديلة لـ lucide-react)
-      const Icon = {
-        Calendar: (props) => (
-          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="16" y1="2" x2="16" y2="6"></line>
-            <line x1="8" y1="2" x2="8" y2="6"></line>
-            <line x1="3" y1="10" x2="21" y2="10"></line>
-          </svg>
-        ),
-        Bell: (props) => (
-          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 01-3.46 0"/>
-          </svg>
-        ),
-        BellOff: (props) => (
-          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M13.73 21a2 2 0 01-3.46 0"/>
-            <path d="M18.63 13A17.89 17.89 0 0018 8a6 6 0 00-9.33-4.95"/>
-            <path d="M2 2l20 20"/>
-            <path d="M4.27 4.27A6 6 0 006 8c0 7-3 9-3 9h14"/>
-          </svg>
-        ),
-        Clock: (props) => (
-          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
-          </svg>
-        ),
-        Trash: (props) => (
-          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-            <path d="M10 11v6"/>
-            <path d="M14 11v6"/>
-            <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
-          </svg>
-        ),
-        Edit: (props) => (
-          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/>
-          </svg>
-        ),
-        Plus: (props) => (
-          <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        ),
-      };
+    .list{margin-top:16px;display:grid;gap:10px}
+    .item{display:flex;align-items:center;gap:10px;background:#101e56;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px}
+    .item .meta{font-size:12px;color:var(--muted)}
+    .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;background:#0e1a49;border:1px solid rgba(255,255,255,.1);padding:2px 6px;border-radius:8px;font-size:12px}
+  </style>
+</head>
+<body>
+  <div id="root" class="container"></div>
+  <script type="text/babel">
+    const {useState,useEffect,useMemo,useRef} = React;
 
-      // أدوات مساعدة للتواريخ
-      const weekdayIndex = {
-        sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
-      };
-      function fmtDate(d) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${dd}`;
-      }
-      function nextDateForWeekday(key, from = new Date()) {
-        const target = weekdayIndex[key];
-        const d = new Date(from);
-        const cur = d.getDay();
-        const diff = (target - cur + 7) % 7; // يشمل اليوم إذا كان نفس اليوم
-        d.setDate(d.getDate() + diff);
-        return d;
-      }
-      function weekdayKeyFromDateStr(dateStr) {
-        const d = new Date(dateStr + 'T00:00:00');
-        const inv = Object.entries(weekdayIndex).find(([, v]) => v === d.getDay());
-        return inv ? inv[0] : 'monday';
+    // Local storage helpers
+    const LS={prov:'leo_prov', key:'leo_api_key', id:'leo_voice_id', specs:'leo_voice_specs'};
+    const load=(k,d='')=>{try{const v=localStorage.getItem(k);return v??d}catch{return d}};
+    const save=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
+
+    function App(){
+      const[text,setText]=useState("مرحبا! اكتب نصك هنا وسيتم التحويل لصوت عبر المزود الذي تختاره.");
+      const[showSettings,setShowSettings]=useState(false);
+      const[provider,setProvider]=useState(load(LS.prov,'google')); // 'google' | 'elevenlabs'
+      const[apiKey,setApiKey]=useState(load(LS.key,''));
+      const[voiceId,setVoiceId]=useState(load(LS.id,'')); // Google: voice name | ElevenLabs: voice_id
+      const[voiceSpecs,setVoiceSpecs]=useState(load(LS.specs,'')); // حر لوصف الصوت/اللغة
+      const[loading,setLoading]=useState(false);
+      const[outputs,setOutputs]=useState([]); // {id, url, provider, createdAt}
+
+      useEffect(()=>save(LS.prov,provider),[provider]);
+      useEffect(()=>save(LS.key,apiKey),[apiKey]);
+      useEffect(()=>save(LS.id,voiceId),[voiceId]);
+      useEffect(()=>save(LS.specs,voiceSpecs),[voiceSpecs]);
+
+      // Helpers
+      const b64ToBlob=(b64,mime)=>{const bin=atob(b64);const len=bin.length;const buf=new Uint8Array(len);for(let i=0;i<len;i++)buf[i]=bin.charCodeAt(i);return new Blob([buf],{type:mime})};
+
+      async function ttsGoogle(text){
+        // Requires a valid Google Cloud TTS API key with access enabled
+        const endpoint=`https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(apiKey)}`;
+        // Try to infer languageCode from specs, fallback to ar-XA
+        const lang=(voiceSpecs.match(/lang[:=]\s*([a-zA-Z-]+)/)?.[1])||'ar-XA';
+        const body={
+          input:{text},
+          voice:{languageCode: lang, name: voiceId || undefined},
+          audioConfig:{audioEncoding:'MP3',speakingRate:1,pitch:0}
+        };
+        const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        if(!res.ok){throw new Error('Google TTS فشل: '+res.status+' '+(await res.text()))}
+        const data=await res.json();
+        if(!data.audioContent) throw new Error('لم يتم إرجاع audioContent');
+        return b64ToBlob(data.audioContent,'audio/mpeg');
       }
 
-      function AppointmentManager() {
-        const weekdays = [
-          { key: "saturday", label: "السبت" },
-          { key: "sunday", label: "الأحد" },
-          { key: "monday", label: "الاثنين" },
-          { key: "tuesday", label: "الثلاثاء" },
-          { key: "wednesday", label: "الأربعاء" },
-          { key: "thursday", label: "الخميس" },
-          { key: "friday", label: "الجمعة" },
-        ];
-
-        const [appointments, setAppointments] = useState(() => {
-          const today = new Date();
-          try {
-            const raw = localStorage.getItem("appt_v1");
-            if (raw) {
-              const arr = JSON.parse(raw);
-              // ترقية النسخ القديمة: إضافة date إن كان مفقودًا
-              return arr.map(a => ({
-                ...a,
-                date: a.date || fmtDate(new Date()),
-                weekdayKey: a.weekdayKey || weekdayKeyFromDateStr(a.date || fmtDate(new Date())),
-              }));
-            }
-          } catch {}
-          // بيانات تجريبية أولية مع تواريخ تناسب أيامها
-          return [
-            { id: crypto.randomUUID(), title: "اجتماع فريق ليو ميديا", time: "10:30", weekdayKey: "monday", date: fmtDate(nextDateForWeekday('monday', today)) },
-            { id: crypto.randomUUID(), title: "محاضرة تدريبية", time: "19:00", weekdayKey: "tuesday", date: fmtDate(nextDateForWeekday('tuesday', today)) },
-            { id: crypto.randomUUID(), title: "مراجعة محتوى", time: "13:15", weekdayKey: "thursday", date: fmtDate(nextDateForWeekday('thursday', today)) },
-          ];
+      async function ttsElevenLabs(text){
+        const voice = voiceId || 'EXAVITQu4vr4xnSDxMaL'; // افتراضي لو مش متحدد
+        const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}`;
+        const payload = {
+          model_id: 'eleven_multilingual_v2',
+          text,
+          voice_settings: { stability: 0.4, similarity_boost: 0.8 }
+        };
+        const res=await fetch(url,{
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'xi-api-key': apiKey
+          },
+          body: JSON.stringify(payload)
         });
+        if(!res.ok){throw new Error('ElevenLabs فشل: '+res.status+' '+(await res.text()))}
+        const buf=await res.arrayBuffer();
+        return new Blob([buf],{type:'audio/mpeg'});
+      }
 
-        useEffect(() => {
-          try { localStorage.setItem("appt_v1", JSON.stringify(appointments)); } catch {}
-        }, [appointments]);
+      async function handleGenerate(){
+        if(!apiKey){alert('من فضلك أدخل API Key أولاً');return}
+        setLoading(true);
+        try{
+          let blob;
+          if(provider==='google') blob=await ttsGoogle(text);
+          else if(provider==='elevenlabs') blob=await ttsElevenLabs(text);
+          else throw new Error('مزود غير مدعوم');
 
-        // عند التحديث أو الريفريش: لا نعرض مواعيد حتى يُضغط على يوم
-        const [selectedDay, setSelectedDay] = useState(null);
-        const [flashEnabled, setFlashEnabled] = useState(true);
+          const url=URL.createObjectURL(blob);
+          const id=Math.random().toString(36).slice(2);
+          setOutputs(prev=>[{id,url,provider,createdAt:new Date().toISOString()},...prev]);
+        }catch(err){
+          console.error(err); alert(err.message||'حدث خطأ أثناء إنشاء الصوت');
+        }finally{ setLoading(false); }
+      }
 
-        const emptyForm = { id: null, title: "", time: "", weekdayKey: "monday", date: fmtDate(new Date()) };
-        const [form, setForm] = useState(emptyForm);
+      function removeItem(id){
+        setOutputs(prev=>{
+          const x=prev.find(o=>o.id===id); if(x) URL.revokeObjectURL(x.url);
+          return prev.filter(o=>o.id!==id);
+        });
+      }
 
-        const hasApptsByDay = useMemo(() => {
-          const map = new Map();
-          weekdays.forEach((d) => map.set(d.key, 0));
-          appointments.forEach((a) => map.set(a.weekdayKey, (map.get(a.weekdayKey) || 0) + 1));
-          return map; // key -> count
-        }, [appointments]);
-
-        const dayAppointments = useMemo(() => {
-          if (!selectedDay) return [];
-          return appointments
-            .filter((a) => a.weekdayKey === selectedDay)
-            .sort((a, b) => (a.date + ' ' + a.time).localeCompare(b.date + ' ' + b.time));
-        }, [appointments, selectedDay]);
-
-        function addAppointment(e) {
-          e.preventDefault();
-          if (!form.title.trim() || !form.time.trim() || !form.date) return;
-
-          // تأكيد مزامنة اليوم مع التاريخ المختار
-          const computedDay = weekdayKeyFromDateStr(form.date);
-          const payload = { id: form.id || crypto.randomUUID(), title: form.title.trim(), time: form.time.trim(), weekdayKey: computedDay, date: form.date };
-
-          if (form.id) {
-            setAppointments((prev) => prev.map((a) => (a.id === form.id ? payload : a)));
-          } else {
-            setAppointments((prev) => [...prev, payload]);
-          }
-
-          setForm({ ...emptyForm, weekdayKey: computedDay, date: form.date });
-          if (!selectedDay) setSelectedDay(computedDay);
-        }
-
-        function editAppointment(appt) {
-          setForm({ id: appt.id, title: appt.title, time: appt.time, weekdayKey: appt.weekdayKey, date: appt.date });
-          if (!selectedDay) setSelectedDay(appt.weekdayKey);
-        }
-
-        function deleteAppointment(id) {
-          setAppointments((prev) => prev.filter((a) => a.id !== id));
-          if (form.id === id) setForm(emptyForm);
-        }
-
-        function onDateChange(newDate) {
-          const newKey = weekdayKeyFromDateStr(newDate);
-          setForm((f) => ({ ...f, date: newDate, weekdayKey: newKey }));
-        }
-
-        return (
-          <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
-            {/* العنوان والشريط العلوي */}
-            <div className="flex items-center justify-between gap-4 mb-6">
-              <div className="flex items-center gap-3">
-                <Icon.Calendar className="w-7 h-7" aria-hidden />
-                <h1 className="text-2xl sm:text-3xl font-bold">منظّم المواعيد</h1>
+      return (
+        <div>
+          <header>
+            <div className="brand">
+              <div className="logo">AI</div>
+              <div>
+                <div className="title">LEO-AI — صانع الصوت الخارجي</div>
+                <div className="muted">العمل عبر مزوّدات حقيقية (Google / ElevenLabs). قد يتطلب تفعيل CORS أو بروكسي على بعض البيئات.</div>
+                <div className="muted">المزوّد: <span className="kbd">{provider}</span> · المفتاح: {apiKey? <span className="kbd">••••••</span> : <span className="kbd">غير مُعين</span>} · الصوت: {voiceId? <span className="kbd">{voiceId}</span> : <span className="kbd">غير مُعين</span>}</div>
               </div>
-              <button
-                onClick={() => setFlashEnabled((v) => !v)}
-                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 transition px-4 py-2 rounded-2xl shadow"
-                aria-pressed={flashEnabled}
-                title={flashEnabled ? "إيقاف الوميض" : "تفعيل الوميض"}
-              >
-                {flashEnabled ? <Icon.Bell className="w-5 h-5" /> : <Icon.BellOff className="w-5 h-5" />}
-                <span className="hidden sm:inline">تنبيهات الوميض</span>
-              </button>
             </div>
+            <div style={{display:'flex',gap:10,alignItems:'center'}}>
+              <span className="badge">{loading? '⏳ جاري الإنشاء...' : 'جاهز'}</span>
+              <button className="btn secondary" onClick={()=>setShowSettings(true)}>إعدادات</button>
+            </div>
+          </header>
 
-            {/* شبكة أيام الأسبوع */}
-            <section aria-label="أيام الأسبوع" className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
-              {weekdays.map((d) => {
-                const isSelected = selectedDay === d.key;
-                const count = hasApptsByDay.get(d.key) || 0;
-                const has = count > 0;
-                return (
-                  <button
-                    key={d.key}
-                    onClick={() => setSelectedDay(d.key)}
-                    className={[
-                      "relative rounded-2xl px-4 py-5 text-center transition focus:outline-none focus:ring-2 focus:ring-white/60",
-                      isSelected ? "bg-white/10 ring-2 ring-white/60" : "bg-white/5 hover:bg-white/10",
-                    ].join(" ")}
-                    aria-pressed={isSelected}
-                  >
-                    <span className="block text-lg font-semibold">{d.label}</span>
-
-                    {/* لمبة حمراء وميضي */}
-                    {has && (
-                      <span
-                        className={[
-                          "absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-600",
-                          flashEnabled ? "flash-red" : "",
-                        ].join(" ")}
-                        aria-hidden
-                      />
-                    )}
-
-                    {/* دائرة خضراء بالعدد */}
-                    {has && (
-                      <span className="absolute -bottom-1 -left-1 min-w-[20px] h-5 px-1 rounded-full bg-green-500 text-xs font-bold flex items-center justify-center">
-                        {count}
-                      </span>
-                    )}
-
-                    {/* إطار أحمر خفيف */}
-                    {has && flashEnabled && (
-                      <span className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-red-600/70 flash-red" aria-hidden />
-                    )}
-                  </button>
-                );
-              })}
-            </section>
-
-            <div className="grid lg:grid-cols-5 gap-6 items-start">
-              {/* قائمة مواعيد اليوم */}
-              <section className="lg:col-span-3 bg-white/5 rounded-2xl p-4 sm:p-6 shadow min-h-[220px]">
-                <header className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold flex items-center gap-2">
-                    <Icon.Clock className="w-5 h-5" />
-                    {selectedDay ? <>مواعيد يوم {weekdays.find(w => w.key === selectedDay)?.label}</> : <>اختر يومًا لعرض مواعيده</>}
-                  </h2>
-                  {selectedDay && (
-                    <span className="text-white/70 text-sm">({dayAppointments.length} موعد)</span>
-                  )}
-                </header>
-
-                {!selectedDay ? (
-                  <p className="text-white/70">لا توجد مواعيد معروضة الآن. اضغط على أي يوم بالأعلى لعرض مواعيده.</p>
-                ) : dayAppointments.length === 0 ? (
-                  <p className="text-white/70">لا توجد مواعيد لهذا اليوم بعد. أضِف موعدًا من النموذج على اليمين.</p>
-                ) : (
-                  <ul className="space-y-3">
-                    {dayAppointments.map((a) => (
-                      <li key={a.id} className="flex items-center justify-between bg-white/5 hover:bg-white/10 transition rounded-xl px-3 py-3">
-                        <div>
-                          <p className="font-semibold">{a.title}</p>
-                          <p className="text-white/70 text-sm">التاريخ: {a.date} — الوقت: {a.time}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => editAppointment(a)}
-                            className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 active:scale-95 transition px-3 py-2 rounded-xl"
-                            title="تعديل الموعد"
-                          >
-                            <Icon.Edit className="w-4 h-4" /> تعديل
-                          </button>
-                          <button
-                            onClick={() => deleteAppointment(a.id)}
-                            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 transition px-3 py-2 rounded-xl"
-                            title="حذف الموعد"
-                          >
-                            <Icon.Trash className="w-4 h-4" /> حذف
-                          </button>
-                        </div>
-                      </li>) )}
-                  </ul>
-                )}
-              </section>
-
-              {/* نموذج إضافة/تعديل موعد */}
-              <aside className="lg:col-span-2 bg-white/5 rounded-2xl p-4 sm:p-6 shadow">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <Icon.Plus className="w-5 h-5" /> {form.id ? "تعديل موعد" : "إضافة موعد جديد"}
-                </h3>
-
-                <form onSubmit={addAppointment} className="space-y-4" autoComplete="off">
-                  <div>
-                    <label className="block mb-2 text-sm text-white/80" htmlFor="title">عنوان الموعد</label>
-                    <input
-                      id="title"
-                      type="text"
-                      required
-                      value={form.title}
-                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                      className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
-                      placeholder="مثال: اجتماع تخطيط المحتوى"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block mb-2 text-sm text-white/80" htmlFor="date">التاريخ</label>
-                      <input
-                        id="date"
-                        type="date"
-                        required
-                        value={form.date}
-                        onChange={(e) => onDateChange(e.target.value)}
-                        className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
-                      />
-                      <p className="mt-1 text-[11px] text-white/60">سيتم ضبط اليوم تلقائيًا وفقًا للتاريخ المختار.</p>
-                    </div>
-                    <div>
-                      <label className="block mb-2 text-sm text-white/80" htmlFor="weekday">اليوم</label>
-                      <select
-                        id="weekday"
-                        value={form.weekdayKey}
-                        onChange={(e) => setForm((f) => ({ ...f, weekdayKey: e.target.value }))}
-                        className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
-                      >
-                        {weekdays.map((d) => (
-                          <option key={d.key} value={d.key}>{d.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block mb-2 text-sm text-white/80" htmlFor="time">الوقت</label>
-                    <input
-                      id="time"
-                      type="time"
-                      required
-                      value={form.time}
-                      onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                      className="w-full rounded-xl bg-white/10 border border-white/20 focus:border-white/50 focus:ring-0 px-3 py-2 outline-none"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="submit"
-                      className="bg-orange-500 hover:bg-orange-600 active:scale-95 transition px-5 py-2.5 rounded-2xl shadow font-semibold"
-                    >
-                      {form.id ? "تحديث الموعد" : "حفظ الموعد"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm(emptyForm)}
-                      className="bg-white/10 hover:bg-white/20 active:scale-95 transition px-4 py-2.5 rounded-2xl shadow"
-                    >
-                      إلغاء
-                    </button>
-                  </div>
-                </form>
-
-                <div className="mt-6 text-xs text-white/60 leading-relaxed">
-                  <p>• يمكنك الآن تحديد <strong>تاريخ</strong> لكل موعد، وسيتم احتسابه ضمن نفس يوم الأسبوع تلقائيًا.</p>
-                  <p>• عرض المواعيد يظل حسب <strong>اليوم</strong> المختار، مع فرز حسب التاريخ ثم الوقت.</p>
-                  <p>• التنبيه الأحمر يومض على الأيام التي تحتوي على مواعيد، ومعه دائرة خضراء توضح العدد.</p>
-                  <p>• يتم حفظ كل شيء محليًا على جهازك (LocalStorage).</p>
-                </div>
-              </aside>
+          <div className="card">
+            <label>النص</label>
+            <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="اكتب النص هنا..." />
+            <div className="btns">
+              <button className="btn primary" onClick={handleGenerate} disabled={loading}>{loading? 'جاري التحويل...' : 'تحويل إلى صوت'}</button>
             </div>
           </div>
-        );
-      }
 
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(<AppointmentManager />);
-    </script>
-  </body>
+          {/* Outputs */}
+          {outputs.length>0 && (
+            <div className="card" style={{marginTop:16}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div style={{fontWeight:800}}>الملفات المُولدة</div>
+                <div className="muted">عدد: {outputs.length}</div>
+              </div>
+              <div className="list">
+                {outputs.map(item=> (
+                  <div key={item.id} className="item">
+                    <audio controls src={item.url} style={{flex:1}}></audio>
+                    <div className="meta">{item.provider}</div>
+                    <a className="btn secondary" href={item.url} download={`tts-${item.provider}-${item.id}.mp3`}>تنزيل</a>
+                    <button className="btn danger" onClick={()=>removeItem(item.id)}>حذف</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {showSettings && (
+            <div className="settings-modal" onClick={(e)=>{ if(e.target===e.currentTarget) setShowSettings(false) }}>
+              <div className="settings-content">
+                <h3>إعدادات</h3>
+                <label>مزود الخدمة</label>
+                <select value={provider} onChange={e=>setProvider(e.target.value)}>
+                  <option value="google">Google Cloud TTS</option>
+                  <option value="elevenlabs">ElevenLabs</option>
+                </select>
+                <label>API Key</label>
+                <input type="text" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder={provider==='google'? 'Google API Key' : 'ElevenLabs xi-api-key'} />
+                <label>Voice ID / Name</label>
+                <input type="text" value={voiceId} onChange={e=>setVoiceId(e.target.value)} placeholder={provider==='google'? 'مثال: ar-XA-Standard-A' : 'مثال: voice_id من ElevenLabs'} />
+                <label>مواصفات الصوت (اختياري)</label>
+                <textarea value={voiceSpecs} onChange={e=>setVoiceSpecs(e.target.value)} placeholder="lang: ar-XA, pitch: 0, rate: 1 ..." />
+                <div className="btns" style={{justifyContent:'flex-end'}}>
+                  <button className="btn secondary" onClick={()=>setShowSettings(false)}>إغلاق</button>
+                  <button className="btn primary" onClick={()=>setShowSettings(false)}>حفظ الإعدادات</button>
+                </div>
+                <div className="muted" style={{marginTop:8}}>
+                  تنبيه أمني: وضع المفاتيح داخل المتصفح يعرّضها للظهور للمستخدم النهائي. الأفضل استخدام وسيط (Proxy) آمن بالسيرفر عند النشر العام.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
 </html>
